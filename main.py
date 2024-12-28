@@ -3,20 +3,13 @@ from loguru import logger
 import pandas as pd
 from joblib import Parallel, delayed
 from theta_snapshot import snapshot, read_from_db, write_to_db, get_iv_chain
-import logging
 
 if __name__ == "__main__":
-    # set logger to info
-    # logger.remove()
-    # logger.add(sys.stdout, level="INFO")
-    # logging.getLogger("httpx").setLevel(logging.WARNING)
-    # logging.getLogger("http").setLevel(logging.WARNING)
-    # logging.getLogger("httpcore").setLevel(logging.WARNING)
-    # logging.getLogger("urllib3").setLevel(logging.WARNING)
-    # logging.getLogger("asyncio").setLevel(logging.WARNING)
-
     right = "C"
     cpus = max(os.cpu_count() - 1, 20)
+    logger.info(
+        f"Number of CPUs: {os.cpu_count()}, defaulting to {cpus} cores for parallel processing"
+    )
 
     logger.info("Reading Grades from DB")
     query = (
@@ -60,3 +53,9 @@ if __name__ == "__main__":
         delayed(get_iv_chain)(symb) for symb in remaining_symbols
     )
     iv_df = pd.concat(ivs)
+
+    # --------------------------------------------------------------
+    # Write to DB
+    # --------------------------------------------------------------
+
+    logger.info("Completed Snapshots and IVs")
