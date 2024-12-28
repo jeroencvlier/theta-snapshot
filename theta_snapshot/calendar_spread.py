@@ -50,7 +50,7 @@ def get_back_expiration_date(
         if bexp in exp_list:
             if offset != 0:
                 log.info(f"Public Holiday Detected, back expiration date is offset {offset} days.")
-            return bexp.strftime("%Y%m%d")
+            return int(bexp.strftime("%Y%m%d"))
 
     return None
 
@@ -108,8 +108,8 @@ def merge_snapshot(front, back):
 
 
 def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
-    # symbol = "JPM"
-    # date_string = "2025-01-15 00:00:00"
+    # symbol = "HUM"
+    # date_string = "2025-01-23 00:00:00"
     # weeks = 1
     # rdate = pd.Timestamp(date_string)
     # right = "C"
@@ -132,11 +132,11 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
 
     if so.bexp is None:
         log.error(f"No back expiration date found for {so.symbol}")
-        sys.exit(0)
+        return pd.DataFrame()
 
     if (so.fexpdt - so.rdatedt).days >= 7:
         log.error("Front expiration date is far close to report date")
-        sys.exit(0)
+        return pd.DataFrame()
 
     # --------------------------------------------------------------
     # Get Snapshots
@@ -180,8 +180,8 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     complete_df["reportDate"] = so.rdate
     complete_df.rename(
         columns={
-            "expiration_front": "fexp",
-            "expiration_back": "bexp",
+            "expiration_front": "exp_back",
+            "expiration_back": "exp_front",
             "root": "symbol",
         },
         inplace=True,

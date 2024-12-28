@@ -310,3 +310,14 @@ def time_checker_ny(target_hour=9, target_minute=34, break_Script=True):
             sys.exit("Too early to run the script.")
         else:
             log.warning("Bypassing time check...")
+
+
+def time_script(func):
+    def wrapper(*args, **kwargs):
+        start = round(dt.now().timestamp())
+        func(*args, **kwargs)
+        end = round(dt.now().timestamp())
+        time_taken = divmod((end - start), 60)
+        log.info(f"Time taken: {time_taken[0]} minutes, {time_taken[1]} seconds")
+
+    return wrapper

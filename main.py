@@ -3,6 +3,7 @@ from loguru import logger as log
 import pandas as pd
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
+from datetime import datetime as dt
 from theta_snapshot import (
     snapshot,
     read_from_db,
@@ -10,17 +11,21 @@ from theta_snapshot import (
     get_iv_chain,
     is_market_open,
     time_checker_ny,
+    time_script,
 )
 
+
+# @time_script
+# def main():
+
 if __name__ == "__main__":
-    # --------------------------------------------------------------
-    # Setup
-    # --------------------------------------------------------------
     load_dotenv(".env")
 
     is_market_open(break_Script=os.getenv("BREAK_SCRIPT") == "True")
     time_checker_ny(break_Script=os.getenv("BREAK_SCRIPT") == "True")
-
+    # --------------------------------------------------------------
+    # Setup
+    # --------------------------------------------------------------
     right = "C"
     cpus = max(os.cpu_count() - 1, 20)
     log.info(f"Available CPUs: {os.cpu_count()}, defaulting to {cpus} for parallelism.")
@@ -53,7 +58,7 @@ if __name__ == "__main__":
     )
 
     inputs = [
-        (snapshot, row["symbol"], row["currentDate"], row["weeks"], right)
+        (snapshot, row["symbol"], row["reportDate"], row["weeks"], right)
         for _, row in snap_df.iterrows()
     ]
 
@@ -65,11 +70,12 @@ if __name__ == "__main__":
     theta_df = theta_df[(theta_df["calCost"] < 5) & (theta_df["calCost"] > 0.8)]
 
     # --------------------------------------------------------------
-    # Merge with Earnings Calendar
+    # Merge with Earnings Calendar and Grades
     # --------------------------------------------------------------
     theta_df = theta_df.merge(
         earn_df[["symbol", "noOfEsts", "bdte", "dte"]], on="symbol", how="inner"
     )
+    theta_df = theta_df.merge(grades, on=["symbol", "weeks"], how="inner")
 
     # --------------------------------------------------------------
     # Merge calCost Table
@@ -110,5 +116,15 @@ if __name__ == "__main__":
     # --------------------------------------------------------------
     # Write to DB
     # --------------------------------------------------------------
+    theta_df["lastUpdated"] = int(dt.now().timestamp())
+    write_to_db(theta_df, "ThetaSnapshot")
+    write_to_db(iv_df, "ThetaIVSnapshot")
 
     log.info("Completed Snapshots and IVs")
+
+    # --------------------------------------------------------------
+    # Telegram
+    # --------------------------------------------------------------
+    time_checker_ny(target_minute=44, break_Script=os.getenv("BREAK_SCRIPT") == "True")
+
+    # main()
