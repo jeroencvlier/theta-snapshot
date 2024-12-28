@@ -92,6 +92,9 @@ if __name__ == "__main__":
     theta_df = theta_df.merge(
         cc_fd[["symbol", "weeks", "calCostPctMeanDayZero"]], on=["symbol", "weeks"], how="inner"
     )
+    # >> end of NOTE
+
+    theta_df = theta_df.merge(calcost_df, on=["symbol", "bdte", "weeks"], how="inner")
 
     # --------------------------------------------------------------
     # Implied Volatility
