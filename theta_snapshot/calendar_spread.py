@@ -1,31 +1,30 @@
-import httpx
 import pandas as pd
 from typing import List
-import logging
+from loguru import logger
 import sys
-import option_emporium as oe
-from theta_snapshot import CalendarSnapData, snapshot_filter
 from datetime import datetime as dt
 from joblib import Parallel, delayed
+from dotenv import load_dotenv
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+import option_emporium as oe
+from theta_snapshot import (
+    CalendarSnapData,
+    snapshot_filter,
+    get_expiry_dates,
+    get_greeks,
+    get_quote,
+    get_oi,
 )
+
+
+load_dotenv(".env")
+
+# logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 pd.set_option("display.max_columns", None)
 
 # --------------------------------------------------------------
 # Helper Functions
 # --------------------------------------------------------------
-
-
-def response_to_df(response, columns):
-    rows = []
-    for item in response:
-        ticks = item["ticks"][0]
-        contract = item["contract"]
-        row = {**contract, **dict(zip(columns, ticks))}
-        rows.append(row)
-    return pd.DataFrame(rows)
 
 
 def is_list_of_timestamps(lst):
@@ -54,7 +53,7 @@ def get_back_expiration_date(
         # Check if the potential back expiration date exists in the data
         if bexp in exp_list:
             if offset != 0:
-                logging.info(
+                logger.info(
                     f"Public Holiday Detected, back expiration date is offset {offset} days."
                 )
             return bexp.strftime("%Y%m%d")
@@ -66,117 +65,17 @@ def get_back_expiration_date(
 # Theta Data API
 # --------------------------------------------------------------
 
-BASE_URL = "http://127.0.0.1:25511/v2"
-
-
-import httpx
-import logging
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-def request_pagination(url, params, max_retries=3, timeout=20.0):
-    """
-    Fetch paginated responses from an API.
-
-    Args:
-        url (str): The initial URL to request.
-        params (dict): Query parameters for the request.
-        max_retries (int): Maximum number of retries for transient errors.
-        timeout (float): Timeout for the HTTP request in seconds.
-
-    Returns:
-        tuple: A list of combined responses and the format header.
-    """
-    responses = []
-    retries = 0
-
-    while url is not None:
-        try:
-            # Make the HTTP request
-            response = httpx.get(url, params=params, timeout=timeout)
-            response.raise_for_status()  # Raise for HTTP errors
-
-            # Parse and append the response
-            data = response.json()
-            responses.extend(data.get("response", []))
-            logger.info(f"Fetched {len(data.get('response', []))} items from {url}")
-
-            # Handle pagination
-            next_page = response.headers.get("Next-Page")
-            url = next_page if next_page and next_page != "null" else None
-
-        except httpx.RequestError as e:
-            logger.error(f"Request error: {e}")
-            if retries < max_retries:
-                retries += 1
-                logger.info(f"Retrying... attempt {retries}")
-            else:
-                logger.error("Max retries exceeded. Exiting pagination.")
-                break
-        except KeyError as e:
-            logger.error(f"Key error: {e}. Response format may have changed.")
-            break
-        except Exception as e:
-            logger.error(f"Unexpected error: {e}")
-            break
-
-    # Return responses and format header (if available)
-    format_header = (
-        data.get("header", {}).get("format", None) if "data" in locals() else None
-    )
-    return responses, format_header
-
-
-def get_expiry_dates(symbol):
-    params = {"root": symbol}
-    url = BASE_URL + "/list/expirations"
-    responses, _ = request_pagination(url, params)
-    return responses
-
-
-def greeks_snapshot(symbol: str, exp: int, right: str):
-    url = BASE_URL + "/bulk_snapshot/option/greeks"
-    params = {"root": symbol, "exp": exp, "right": right}
-    response, columns = request_pagination(url, params)
-    df = response_to_df(response, columns)
-    df = df[df["right"] == right]
-    df.drop(columns=["ms_of_day2", "bid", "ask", "ms_of_day"], inplace=True)
-    return df
-
 
 def get_greeks_snapshot(so: CalendarSnapData, fb: str):
     if fb == "front":
-        so.greeks_front = greeks_snapshot(so.symbol, so.fexp, so.right)
+        so.greeks_front = get_greeks(so.symbol, so.fexp, so.right)
         so.greeks_front.rename(columns={"underlying_price": "underlying"}, inplace=True)
     elif fb == "back":
-        so.greeks_back = greeks_snapshot(so.symbol, so.bexp, so.right)
+        so.greeks_back = get_greeks(so.symbol, so.bexp, so.right)
         so.greeks_back.drop(columns="underlying_price", inplace=True)
     else:
-        logging.error(f"Invalid front/back value: {fb}")
+        logger.error(f"Invalid front/back value: {fb}")
         raise ValueError
-
-
-def get_quote(symbol: str, exp: int, right: str):
-    url = BASE_URL + "/bulk_snapshot/option/quote"
-    params = {"root": symbol, "exp": exp, "right": right}
-    response, columns = request_pagination(url, params)
-    df = response_to_df(response, columns)
-    df = df[df["right"] == right]
-    df.drop(
-        columns=[
-            "bid_condition",
-            "bid_exchange",
-            "ask_condition",
-            "ask_exchange",
-            "ms_of_day",
-        ],
-        inplace=True,
-    )
-    df = oe.calculate_mark(df)
-    return df
 
 
 def get_quote_snapshot(so: CalendarSnapData, fb: str):
@@ -185,19 +84,8 @@ def get_quote_snapshot(so: CalendarSnapData, fb: str):
     elif fb == "back":
         so.quotes_back = get_quote(so.symbol, so.bexp, so.right)
     else:
-        logging.error(f"Invalid front/back value: {fb}")
+        logger.error(f"Invalid front/back value: {fb}")
         raise ValueError
-
-
-def get_oi(symbol: str, exp: int, right: str):
-    url = BASE_URL + "/bulk_snapshot/option/open_interest"
-    # logging.info("Requesting port: %s", url)
-    params = {"root": symbol, "exp": exp, "right": right}
-    response, columns = request_pagination(url, params)
-    df = response_to_df(response, columns)
-    df = df[df["right"] == right]
-    df.drop(columns=["ms_of_day"], inplace=True)
-    return df
 
 
 def get_oi_snapshot(so: CalendarSnapData, fb: str):
@@ -206,7 +94,7 @@ def get_oi_snapshot(so: CalendarSnapData, fb: str):
     elif fb == "back":
         so.oi_back = get_oi(so.symbol, so.bexp, so.right)
     else:
-        logging.error(f"Invalid front/back value: {fb}")
+        logger.error(f"Invalid front/back value: {fb}")
         raise ValueError
 
 
@@ -249,11 +137,11 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     )
 
     if so.bexp is None:
-        logging.error(f"No back expiration date found for {so.symbol}")
+        logger.error(f"No back expiration date found for {so.symbol}")
         sys.exit(0)
 
     if (so.fexpdt - so.rdatedt).days >= 7:
-        logging.error("Front expiration date is far close to report date")
+        logger.error("Front expiration date is far close to report date")
         sys.exit(0)
 
     # --------------------------------------------------------------
@@ -268,9 +156,7 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
         (get_oi_snapshot, so, "front"),
         (get_oi_snapshot, so, "back"),
     ]
-    _ = Parallel(n_jobs=6, backend="threading")(
-        delayed(func)(*args) for func, *args in inputs
-    )
+    _ = Parallel(n_jobs=6, backend="threading")(delayed(func)(*args) for func, *args in inputs)
 
     so.greeks = merge_snapshot(so.greeks_front, so.greeks_back)
     so.quotes = merge_snapshot(so.quotes_front, so.quotes_back)
@@ -313,8 +199,3 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     complete_df = snapshot_filter(df=complete_df, min_oi=20, max_rows=2)
 
     return complete_df
-
-
-if __name__ == "__main__":
-    snapshot("JPM", pd.Timestamp("2025-01-15"), 1, "C")
-    print("Done")

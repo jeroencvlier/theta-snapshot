@@ -5,7 +5,12 @@ from typing import Optional
 from sqlalchemy import create_engine
 import os
 from dotenv import load_dotenv
-from loguru import logger as logging
+
+# import logging
+import httpx
+import option_emporium as oe
+
+from loguru import logger
 
 # --------------------------------------------------------------
 # Data Classes
@@ -46,9 +51,7 @@ class CalendarSnapData:
     def fexp(self, value: Optional[int]):
         """Setter for fexp with automatic conversion to fexpdt."""
         self._fexp = value
-        self.fexpdt = (
-            pd.to_datetime(str(value), format="%Y%m%d") if value is not None else None
-        )
+        self.fexpdt = pd.to_datetime(str(value), format="%Y%m%d") if value is not None else None
 
     @property
     def bexp(self) -> Optional[int]:
@@ -59,9 +62,7 @@ class CalendarSnapData:
     def bexp(self, value: Optional[int]):
         """Setter for bexp with automatic conversion to bexpdt."""
         self._bexp = value
-        self.bexpdt = (
-            pd.to_datetime(str(value), format="%Y%m%d") if value is not None else None
-        )
+        self.bexpdt = pd.to_datetime(str(value), format="%Y%m%d") if value is not None else None
 
     @property
     def rdate_dt(self) -> pd.Timestamp:
@@ -84,8 +85,7 @@ def underlying_price_filter(df: pd.DataFrame, max_rows: int = 2):
             if upper_bound > 0.05:
                 break
             filtered_df = df[
-                (df["undPricePctDiff"] >= lower_bound)
-                & (df["undPricePctDiff"] <= upper_bound)
+                (df["undPricePctDiff"] >= lower_bound) & (df["undPricePctDiff"] <= upper_bound)
             ]
             if len(filtered_df) >= max_rows:
                 df = filtered_df
@@ -123,32 +123,152 @@ def read_from_db(table: str = None, query: str = None) -> pd.DataFrame:
         try:
             return pd.read_sql(query, create_engine(os.getenv("POSTGRESSSQL_URL")))
         except Exception as err:
-            logging.error(f"FAILED to read DataFrame from database. ERROR: {err}")
+            logger.error(f"FAILED to read DataFrame from database. ERROR: {err}")
             return pd.DataFrame()
 
     elif table:
         try:
-            return pd.read_sql_table(
-                table, create_engine(os.getenv("POSTGRESSSQL_URL"))
-            )
+            return pd.read_sql_table(table, create_engine(os.getenv("POSTGRESSSQL_URL")))
         except Exception as err:
-            logging.error(f"FAILED to read DataFrame from database. ERROR: {err}")
+            logger.error(f"FAILED to read DataFrame from database. ERROR: {err}")
             return pd.DataFrame()
 
 
 def write_to_db(
-    df: pd.DataFrame, table_name: str, conn_string: str = None, if_exists="replace"
+    df: pd.DataFrame, table_name: str, conn_db: str = None, if_exists="replace"
 ) -> None:
     load_dotenv(".env")
-    if conn_string is None:
-        conn_string = "POSTGRESSSQL_URL"
+    if conn_db is None:
+        conn_db = "POSTGRESSSQL_URL"
     try:
         df.to_sql(
             table_name,
-            create_engine(os.getenv(conn_string)),
+            create_engine(os.getenv(conn_db)),
             if_exists=if_exists,
             index=False,
         )
-        logging.info(f"DataFrame written to database successfully. Table: {table_name}")
+        logger.info(f"DataFrame written to database successfully. Table: {table_name}")
     except Exception as err:
-        logging.error(f"FAILED to write DataFrame to database. ERROR: {err}")
+        logger.error(f"FAILED to write DataFrame to database. ERROR: {err}")
+
+
+# --------------------------------------------------------------
+# HTTPX Functions
+# --------------------------------------------------------------
+
+
+def request_pagination(url, params, max_retries=3, timeout=20.0):
+    """
+    Fetch paginated responses from an API.
+
+    Args:
+        url (str): The initial URL to request.
+        params (dict): Query parameters for the request.
+        max_retries (int): Maximum number of retries for transient errors.
+        timeout (float): Timeout for the HTTP request in seconds.
+
+    Returns:
+        tuple: A list of combined responses and the format header.
+    """
+    responses = []
+    retries = 0
+
+    while url is not None:
+        try:
+            # Make the HTTP request
+            response = httpx.get(url, params=params, timeout=timeout)
+            response.raise_for_status()  # Raise for HTTP errors
+
+            # Parse and append the response
+            data = response.json()
+            responses.extend(data.get("response", []))
+            # logger.debug(f"Fetched {len(data.get('response', []))} items from {url}")
+
+            # Handle pagination
+            next_page = response.headers.get("Next-Page")
+            url = next_page if next_page and next_page != "null" else None
+
+        except httpx.RequestError as e:
+            logger.error(f"Request error: {e}")
+            if retries < max_retries:
+                retries += 1
+                logger.warning(f"Retrying... attempt {retries}")
+            else:
+                logger.error("Max retries exceeded. Exiting pagination.")
+                break
+        except KeyError as e:
+            logger.error(f"Key error: {e}. Response format may have changed.")
+            break
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            break
+
+    # Return responses and format header (if available)
+    format_header = data.get("header", {}).get("format", None) if "data" in locals() else None
+    return responses, format_header
+
+
+def get_expiry_dates(symbol):
+    params = {"root": symbol}
+    url = os.getenv("BASE_URL") + "/list/expirations"
+    responses, _ = request_pagination(url, params)
+    return responses
+
+
+def get_greeks(symbol: str, exp: int, right: str):
+    url = os.getenv("BASE_URL") + "/bulk_snapshot/option/greeks"
+    params = {"root": symbol, "exp": exp}
+    response, columns = request_pagination(url, params)
+    df = response_to_df(response, columns)
+    if right in ["C", "P"]:
+        df = df[df["right"] == right]
+    df.drop(columns=["ms_of_day2", "bid", "ask", "ms_of_day"], inplace=True)
+    return df
+
+
+def get_quote(symbol: str, exp: int, right: str):
+    url = os.getenv("BASE_URL") + "/bulk_snapshot/option/quote"
+    params = {"root": symbol, "exp": exp}
+    response, columns = request_pagination(url, params)
+    df = response_to_df(response, columns)
+    if right in ["C", "P"]:
+        df = df[df["right"] == right]
+    df.drop(
+        columns=[
+            "bid_condition",
+            "bid_exchange",
+            "ask_condition",
+            "ask_exchange",
+            "ms_of_day",
+        ],
+        inplace=True,
+    )
+    df = oe.calculate_mark(df)
+    return df
+
+
+def get_oi(symbol: str, exp: int, right: str):
+    url = os.getenv("BASE_URL") + "/bulk_snapshot/option/open_interest"
+    # logger.info("Requesting port: %s", url)
+    params = {"root": symbol, "exp": exp}
+    response, columns = request_pagination(url, params)
+    df = response_to_df(response, columns)
+    if right in ["C", "P"]:
+        df = df[df["right"] == right]
+    df.drop(columns=["ms_of_day"], inplace=True)
+    return df
+
+
+# --------------------------------------------------------------
+# Helper Functions
+# --------------------------------------------------------------
+
+
+def response_to_df(response, columns):
+    rows = []
+    for item in response:
+        ticks = item["ticks"][0]
+        contract = item["contract"]
+        row = {**contract, **dict(zip(columns, ticks))}
+        rows.append(row)
+    return pd.DataFrame(rows)
