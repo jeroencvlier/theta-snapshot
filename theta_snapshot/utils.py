@@ -1,16 +1,17 @@
 from dataclasses import dataclass, field
 import pandas as pd
-from datetime import datetime
+import pytz
+from datetime import datetime as dt
 from typing import Optional
 from sqlalchemy import create_engine
 import os
-from dotenv import load_dotenv
+import sys
 
 # import logging
 import httpx
 import option_emporium as oe
 
-from loguru import logger
+from loguru import logger as log
 
 # --------------------------------------------------------------
 # Data Classes
@@ -20,7 +21,7 @@ from loguru import logger
 @dataclass
 class CalendarSnapData:
     symbol: str
-    rdatedt: datetime
+    rdatedt: dt
     weeks: int
     right: str
     rdate: int = field(init=False)  # Automatically computed
@@ -116,28 +117,26 @@ def snapshot_filter(df: pd.DataFrame, min_oi: int = 20, max_rows: int = 2):
 
 
 def read_from_db(table: str = None, query: str = None) -> pd.DataFrame:
-    load_dotenv(".env")
     assert table or query, "Table or query must be provided"
     assert not (table and query), "Only one of table or query must be provided"
     if query:
         try:
             return pd.read_sql(query, create_engine(os.getenv("POSTGRESSSQL_URL")))
         except Exception as err:
-            logger.error(f"FAILED to read DataFrame from database. ERROR: {err}")
+            log.error(f"FAILED to read DataFrame from database. ERROR: {err}")
             return pd.DataFrame()
 
     elif table:
         try:
             return pd.read_sql_table(table, create_engine(os.getenv("POSTGRESSSQL_URL")))
         except Exception as err:
-            logger.error(f"FAILED to read DataFrame from database. ERROR: {err}")
+            log.error(f"FAILED to read DataFrame from database. ERROR: {err}")
             return pd.DataFrame()
 
 
 def write_to_db(
     df: pd.DataFrame, table_name: str, conn_db: str = None, if_exists="replace"
 ) -> None:
-    load_dotenv(".env")
     if conn_db is None:
         conn_db = "POSTGRESSSQL_URL"
     try:
@@ -147,9 +146,9 @@ def write_to_db(
             if_exists=if_exists,
             index=False,
         )
-        logger.info(f"DataFrame written to database successfully. Table: {table_name}")
+        log.info(f"DataFrame written to database successfully. Table: {table_name}")
     except Exception as err:
-        logger.error(f"FAILED to write DataFrame to database. ERROR: {err}")
+        log.error(f"FAILED to write DataFrame to database. ERROR: {err}")
 
 
 # --------------------------------------------------------------
@@ -182,25 +181,25 @@ def request_pagination(url, params, max_retries=3, timeout=20.0):
             # Parse and append the response
             data = response.json()
             responses.extend(data.get("response", []))
-            # logger.debug(f"Fetched {len(data.get('response', []))} items from {url}")
+            # log.debug(f"Fetched {len(data.get('response', []))} items from {url}")
 
             # Handle pagination
             next_page = response.headers.get("Next-Page")
             url = next_page if next_page and next_page != "null" else None
 
         except httpx.RequestError as e:
-            logger.error(f"Request error: {e}")
+            log.error(f"Request error: {e}")
             if retries < max_retries:
                 retries += 1
-                logger.warning(f"Retrying... attempt {retries}")
+                log.warning(f"Retrying... attempt {retries}")
             else:
-                logger.error("Max retries exceeded. Exiting pagination.")
+                log.error("Max retries exceeded. Exiting pagination.")
                 break
         except KeyError as e:
-            logger.error(f"Key error: {e}. Response format may have changed.")
+            log.error(f"Key error: {e}. Response format may have changed.")
             break
         except Exception as e:
-            logger.error(f"Unexpected error: {e}")
+            log.error(f"Unexpected error: {e}")
             break
 
     # Return responses and format header (if available)
@@ -249,7 +248,7 @@ def get_quote(symbol: str, exp: int, right: str):
 
 def get_oi(symbol: str, exp: int, right: str):
     url = os.getenv("BASE_URL") + "/bulk_snapshot/option/open_interest"
-    # logger.info("Requesting port: %s", url)
+    # log.info("Requesting port: %s", url)
     params = {"root": symbol, "exp": exp}
     response, columns = request_pagination(url, params)
     df = response_to_df(response, columns)
@@ -272,3 +271,42 @@ def response_to_df(response, columns):
         row = {**contract, **dict(zip(columns, ticks))}
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def is_market_open(break_Script=True) -> bool:
+    try:
+        url = f'https://api.polygon.io/v1/marketstatus/now?apiKey={os.getenv("naughty_hermann")}'
+        response = httpx.get(url)
+        if response.json()["market"].lower() == "open":
+            log.info("Market is open")
+            is_open = True
+        else:
+            log.info("Market is closed")
+            is_open = False
+    except Exception as e:
+        log.error(f"Failed to fetch market status - {e}")
+        log.info("Building calendar with assumption that market is open")
+        is_open = True
+
+    finally:
+        if break_Script and not is_open:
+            sys.exit("Market is closed")
+        else:
+            log.warning("Bypassing market open check...")
+            return is_open
+
+
+def time_checker_ny(target_hour=9, target_minute=34, break_Script=True):
+    new_york_tz = pytz.timezone("America/New_York")
+    current_time_ny = dt.now(new_york_tz)
+    target_time = current_time_ny.replace(
+        hour=target_hour, minute=target_minute, second=0, microsecond=0
+    )
+    if current_time_ny < target_time:
+        # datetime.datetime(2024, 12, 28, 6, 57, 10, 157880, tzinfo=<DstTzInfo 'America/New_York' EST-1 day, 19:00:00 STD>)
+        log.info(f"{current_time_ny.strftime('%Y-%m-%d %H:%M:%S %Z')} -> Current Time")
+        log.info(f"{target_time.strftime('%Y-%m-%d %H:%M:%S %Z')} -> Target Time")
+        if break_Script:
+            sys.exit("Too early to run the script.")
+        else:
+            log.warning("Bypassing time check...")

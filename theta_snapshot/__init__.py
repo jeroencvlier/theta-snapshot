@@ -9,6 +9,8 @@ from .utils import (
     get_greeks,
     get_quote,
     get_oi,
+    is_market_open,
+    time_checker_ny,
 )
 from .calendar_spread import snapshot
 from .implied_volatility import get_iv_chain
@@ -26,4 +28,6 @@ __all__ = [
     "get_quote",
     "get_oi",
     "get_iv_chain",
+    "is_market_open",
+    "time_checker_ny",
 ]

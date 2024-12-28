@@ -1,10 +1,9 @@
 import pandas as pd
 from typing import List
-from loguru import logger
+from loguru import logger as log
 import sys
 from datetime import datetime as dt
 from joblib import Parallel, delayed
-from dotenv import load_dotenv
 
 import option_emporium as oe
 from theta_snapshot import (
@@ -15,9 +14,6 @@ from theta_snapshot import (
     get_quote,
     get_oi,
 )
-
-
-load_dotenv(".env")
 
 # logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 pd.set_option("display.max_columns", None)
@@ -53,9 +49,7 @@ def get_back_expiration_date(
         # Check if the potential back expiration date exists in the data
         if bexp in exp_list:
             if offset != 0:
-                logger.info(
-                    f"Public Holiday Detected, back expiration date is offset {offset} days."
-                )
+                log.info(f"Public Holiday Detected, back expiration date is offset {offset} days.")
             return bexp.strftime("%Y%m%d")
 
     return None
@@ -74,7 +68,7 @@ def get_greeks_snapshot(so: CalendarSnapData, fb: str):
         so.greeks_back = get_greeks(so.symbol, so.bexp, so.right)
         so.greeks_back.drop(columns="underlying_price", inplace=True)
     else:
-        logger.error(f"Invalid front/back value: {fb}")
+        log.error(f"Invalid front/back value: {fb}")
         raise ValueError
 
 
@@ -84,7 +78,7 @@ def get_quote_snapshot(so: CalendarSnapData, fb: str):
     elif fb == "back":
         so.quotes_back = get_quote(so.symbol, so.bexp, so.right)
     else:
-        logger.error(f"Invalid front/back value: {fb}")
+        log.error(f"Invalid front/back value: {fb}")
         raise ValueError
 
 
@@ -94,7 +88,7 @@ def get_oi_snapshot(so: CalendarSnapData, fb: str):
     elif fb == "back":
         so.oi_back = get_oi(so.symbol, so.bexp, so.right)
     else:
-        logger.error(f"Invalid front/back value: {fb}")
+        log.error(f"Invalid front/back value: {fb}")
         raise ValueError
 
 
@@ -137,11 +131,11 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     )
 
     if so.bexp is None:
-        logger.error(f"No back expiration date found for {so.symbol}")
+        log.error(f"No back expiration date found for {so.symbol}")
         sys.exit(0)
 
     if (so.fexpdt - so.rdatedt).days >= 7:
-        logger.error("Front expiration date is far close to report date")
+        log.error("Front expiration date is far close to report date")
         sys.exit(0)
 
     # --------------------------------------------------------------

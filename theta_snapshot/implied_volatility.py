@@ -8,10 +8,7 @@ from theta_snapshot import (
     get_greeks,
 )
 
-from dotenv import load_dotenv
-from loguru import logger
-
-load_dotenv(".env")
+from loguru import logger as log
 
 
 def get_most_common_strikes(ivs_list, symbol):
@@ -20,7 +17,7 @@ def get_most_common_strikes(ivs_list, symbol):
     max_count = max(strike_counts.values())
     return_strikes = {strike for strike, count in strike_counts.items() if count == max_count}
     if len(return_strikes) < 3:
-        logger.error(
+        log.error(
             "Less than 3 strikes found in the IV dataframes for symbol %s. %s",
             symbol,
             return_strikes,
@@ -86,4 +83,4 @@ def get_iv_chain(symb):
         return symb_ivs
 
     except Exception as err:
-        logger.error("Symbol: %s, Error: %s", symb, err)
+        log.error("Symbol: %s, Error: %s", symb, err)
