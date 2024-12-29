@@ -4,6 +4,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
 from datetime import datetime as dt
+import option_emporium as oe
+
 from theta_snapshot import (
     snapshot,
     read_from_db,
@@ -101,6 +103,7 @@ if __name__ == "__main__":
     # >> end of NOTE
 
     theta_df = theta_df.merge(calcost_df, on=["symbol", "bdte", "weeks"], how="inner")
+    theta_df = oe.calculate_diffs(theta_df)
 
     # --------------------------------------------------------------
     # Implied Volatility
