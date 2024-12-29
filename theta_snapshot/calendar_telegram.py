@@ -233,10 +233,9 @@ def send_telegram_alerts():
             earn_dates[["symbol", "comment", "sourceUsed"]], on="symbol", how="left"
         )
 
-        new_alerts
-
         chat_ids = [c for c in os.getenv("TELEGRAM_BOT_TRADEALERT_IDS").split(",") if len(c) > 0]
-        # chatids seperated by comma
+        log.info(f"Sending alerts to chat_ids: {chat_ids}")
+
         bot = telebot.TeleBot(os.getenv("TELEGRAM_BOT_TRADEALERT_TOKEN"))
 
         comment_symbols = {
