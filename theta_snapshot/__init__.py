@@ -14,7 +14,7 @@ from .utils import (
     time_script,
 )
 from .calendar_spread import snapshot
-from .implied_volatility import get_iv_chain
+from .implied_volatility import get_iv_chain, iv_features
 
 __all__ = [
     "CalendarSnapData",
@@ -32,4 +32,5 @@ __all__ = [
     "is_market_open",
     "time_checker_ny",
     "time_script",
+    "iv_features",
 ]

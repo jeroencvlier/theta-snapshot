@@ -766,13 +766,13 @@ files = [
 
 [[package]]
 name = "option-emporium"
-version = "0.0.38"
+version = "0.0.40"
 description = ""
 optional = false
 python-versions = "<3.13,>=3.9"
 files = [
-    {file = "option_emporium-0.0.38-py3-none-any.whl", hash = "sha256:7eb418e85b9575a5ae4695d5e5d5a6643af73b6d7c31b318db491738682ccb95"},
-    {file = "option_emporium-0.0.38.tar.gz", hash = "sha256:a0a893e8a65770c0968583b54f934e9a086785572cae1f07efd0e0fa5a9292ae"},
+    {file = "option_emporium-0.0.40-py3-none-any.whl", hash = "sha256:9e4a4be8e77fe8a4c7e245dcf20632583759479b19cde4562a5c5e8e64eb1d10"},
+    {file = "option_emporium-0.0.40.tar.gz", hash = "sha256:dedd1dc69dbfc6eccfbc5125601af2f2dc5e4f1bae13a9c174261c71a26aefef"},
 ]
 
 [package.dependencies]

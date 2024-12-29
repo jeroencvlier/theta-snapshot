@@ -70,6 +70,15 @@ class CalendarSnapData:
         """Getter for rdatedt."""
         return pd.Timestamp(self.rdatedt)
 
+    def __repr__(self):
+        attributes = [
+            f"\t{field}={getattr(self, field)!r}"
+            for field in self.__dataclass_fields__
+            if getattr(self, field) is not None
+        ]
+        attributes_str = ",\n".join(attributes)
+        return f"CalendarSnapData(\n{attributes_str}\n)"
+
 
 # --------------------------------------------------------------
 # Filter Functions
@@ -222,6 +231,7 @@ def get_greeks(symbol: str, exp: int, right: str):
     if right in ["C", "P"]:
         df = df[df["right"] == right]
     df.drop(columns=["ms_of_day2", "bid", "ask", "ms_of_day"], inplace=True)
+
     return df
 
 
@@ -233,13 +243,7 @@ def get_quote(symbol: str, exp: int, right: str):
     if right in ["C", "P"]:
         df = df[df["right"] == right]
     df.drop(
-        columns=[
-            "bid_condition",
-            "bid_exchange",
-            "ask_condition",
-            "ask_exchange",
-            "ms_of_day",
-        ],
+        columns=["bid_condition", "bid_exchange", "ask_condition", "ask_exchange"],
         inplace=True,
     )
     df = oe.calculate_mark(df)
@@ -270,7 +274,17 @@ def response_to_df(response, columns):
         contract = item["contract"]
         row = {**contract, **dict(zip(columns, ticks))}
         rows.append(row)
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    rename_dict = {
+        "strike": "strike_milli",
+        "underlying_price": "underlying",
+        "expiration": "exp",
+        "root": "symbol",
+    }
+    for k, v in rename_dict.items():
+        if k in df.columns:
+            df.rename(columns={k: v}, inplace=True)
+    return df
 
 
 def is_market_open(break_Script=True) -> bool:

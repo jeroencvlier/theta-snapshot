@@ -13,7 +13,7 @@ from loguru import logger as log
 
 def get_most_common_strikes(ivs_list, symbol):
     """Get strikes that appear most frequently across all IV dataframes"""
-    strike_counts = Counter(strike for iv in ivs_list for strike in iv["strike"].unique())
+    strike_counts = Counter(strike for iv in ivs_list for strike in iv["strike_milli"].unique())
     max_count = max(strike_counts.values())
     return_strikes = {strike for strike, count in strike_counts.items() if count == max_count}
     if len(return_strikes) < 3:
@@ -53,7 +53,7 @@ def get_iv_chain(symb):
             delayed(func)(*args) for func, *args in inputs
         )
 
-        underlying = pd.concat(greeks)["underlying_price"].mean().round(2)
+        underlying = pd.concat(greeks)["underlying"].mean().round(2)
 
         symb_ivs_puts = [df[df["right"] == "P"] for df in greeks]
         symb_ivs_calls = [df[df["right"] == "C"] for df in greeks]
@@ -63,20 +63,20 @@ def get_iv_chain(symb):
         putstrike = find_closest_strike(strikes_puts, underlying * 1000)
         callstrike = find_closest_strike(strikes_calls, underlying * 1000)
         symb_ivs_puts = pd.concat(symb_ivs_puts)
-        symb_ivs_puts = symb_ivs_puts[symb_ivs_puts["strike"] == putstrike]
+        symb_ivs_puts = symb_ivs_puts[symb_ivs_puts["strike_milli"] == putstrike]
         symb_ivs_puts["right"] = "P"
 
         symb_ivs_calls = pd.concat(symb_ivs_calls)
-        symb_ivs_calls = symb_ivs_calls[symb_ivs_calls["strike"] == callstrike]
+        symb_ivs_calls = symb_ivs_calls[symb_ivs_calls["strike_milli"] == callstrike]
         symb_ivs_calls["right"] = "C"
 
         symb_ivs = pd.concat([symb_ivs_puts, symb_ivs_calls])
         symb_ivs["symbol"] = symb
 
         symb_ivs["underlying"] = underlying
-        symb_ivs["strike_relative"] = round(symb_ivs["strike"] / 1000, 2)
+        symb_ivs["strike"] = round(symb_ivs["strike_milli"] / 1000, 2)
         symb_ivs["strike_pct_diff"] = round(
-            (symb_ivs["strike_relative"] - symb_ivs["underlying"]) / symb_ivs["underlying"],
+            (symb_ivs["strike"] - symb_ivs["underlying"]) / symb_ivs["underlying"],
             3,
         )
 
@@ -84,3 +84,20 @@ def get_iv_chain(symb):
 
     except Exception as err:
         log.error("Symbol: %s, Error: %s", symb, err)
+
+
+def iv_features(df: pd.DataFrame, iv_df: pd.DataFrame) -> pd.DataFrame:
+    max_iv = (
+        iv_df.sort_values(by=["implied_vol"])
+        .drop_duplicates(subset=["symbol", "right"], keep="last")[["symbol", "right", "exp"]]
+        .pivot(index="symbol", columns="right", values="exp")
+        .rename(columns={"C": "iv_max_exp_c", "P": "iv_max_exp_p"})
+        .reset_index()
+        .rename_axis(None, axis=1)
+    )
+    max_iv["iv_pc_max_same"] = max_iv["iv_max_exp_c"] == max_iv["iv_max_exp_p"]
+    df = df.merge(max_iv, on="symbol", how="inner")
+    df["iv_fexp_c"] = df["iv_max_exp_c"] == df["exp_front"]
+    df["iv_fexp_p"] = df["iv_max_exp_p"] == df["exp_front"]
+    df["iv_consensus"] = df["iv_fexp_c"] & df["iv_fexp_p"]
+    return df

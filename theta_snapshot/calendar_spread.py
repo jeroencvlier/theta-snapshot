@@ -62,10 +62,9 @@ def get_back_expiration_date(
 def get_greeks_snapshot(so: CalendarSnapData, fb: str):
     if fb == "front":
         so.greeks_front = get_greeks(so.symbol, so.fexp, so.right)
-        so.greeks_front.rename(columns={"underlying_price": "underlying"}, inplace=True)
     elif fb == "back":
         so.greeks_back = get_greeks(so.symbol, so.bexp, so.right)
-        so.greeks_back.drop(columns="underlying_price", inplace=True)
+        so.greeks_back.drop(columns="underlying", inplace=True)
     else:
         log.error(f"Invalid front/back value: {fb}")
         raise ValueError
@@ -76,6 +75,7 @@ def get_quote_snapshot(so: CalendarSnapData, fb: str):
         so.quotes_front = get_quote(so.symbol, so.fexp, so.right)
     elif fb == "back":
         so.quotes_back = get_quote(so.symbol, so.bexp, so.right)
+        so.quotes_back.drop(columns="ms_of_day", inplace=True)
     else:
         log.error(f"Invalid front/back value: {fb}")
         raise ValueError
@@ -95,7 +95,7 @@ def merge_snapshot(front, back):
     return pd.merge(
         front,
         back,
-        on=[c for c in front if c in ["root", "right", "date", "strike"]],
+        on=[c for c in front if c in ["symbol", "right", "date", "strike_milli"]],
         how="inner",
         suffixes=("_front", "_back"),
     )
@@ -109,7 +109,7 @@ def merge_snapshot(front, back):
 def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     # symbol = "HUM"
     # date_string = "2025-01-23 00:00:00"
-    # weeks = 1
+    # weeks = 2
     # rdate = pd.Timestamp(date_string)
     # right = "C"
 
@@ -130,7 +130,11 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     )
 
     if so.bexp is None:
-        log.error(f"No back expiration date found for {so.symbol}")
+        log.warning(f"No back expiration date found for {so.symbol}")
+        log.info(f"DataClass: \n{so}")
+        log.info(f"Expirations: {cal_dates}")
+        expiration_sought = (so.fexpdt + pd.DateOffset(days=(so.weeks * 7))).strftime("%Y%m%d")
+        log.info(f"Expiration Sought: {expiration_sought}")
         return pd.DataFrame()
 
     if (so.fexpdt - so.rdatedt).days >= 7:
@@ -155,7 +159,7 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     so.quotes = merge_snapshot(so.quotes_front, so.quotes_back)
     so.oi = merge_snapshot(so.oi_front, so.oi_back)
 
-    m_cols = ["root", "right", "date", "strike", "expiration_front", "expiration_back"]
+    m_cols = ["symbol", "right", "date", "strike_milli", "exp_front", "exp_back"]
     complete_df = so.quotes.merge(
         so.greeks, on=m_cols, how="inner", suffixes=("_quote", "_ivgreek")
     ).merge(so.oi, on=m_cols, how="inner", suffixes=("", "_oi"))
@@ -163,8 +167,8 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     # --------------------------------------------------------------
     # Assertions for the final DataFrame
     # --------------------------------------------------------------
-    assert len(complete_df["root"].unique()) == 1, "Multiple symbols found"
-    assert so.symbol == complete_df["root"].unique()[0], "Symbol mismatch"
+    assert len(complete_df["symbol"].unique()) == 1, "Multiple symbols found"
+    assert so.symbol == complete_df["symbol"].unique()[0], "Symbol mismatch"
     assert len(complete_df["right"].unique()) == 1, "Multiple rights found"
     assert so.right == complete_df["right"].unique()[0], "Right mismatch"
     assert len(complete_df["date"].unique()) == 1, "Multiple dates found"
@@ -172,19 +176,11 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     # --------------------------------------------------------------
     # Calculations and Column creation
     # --------------------------------------------------------------
-    complete_df["strike"] = complete_df["strike"].div(1000).round(2)
+    complete_df["strike"] = complete_df["strike_milli"].div(1000).round(2)
     complete_df = oe.calculate_spreads(complete_df)
     complete_df = oe.calendar_calculations(complete_df)
     complete_df["weeks"] = so.weeks
     complete_df["reportDate"] = so.rdate
-    complete_df.rename(
-        columns={
-            "expiration_front": "exp_back",
-            "expiration_back": "exp_front",
-            "root": "symbol",
-        },
-        inplace=True,
-    )
 
     # --------------------------------------------------------------
     # Filters

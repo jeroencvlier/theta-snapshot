@@ -1,4 +1,5 @@
 import os
+import sys
 from loguru import logger as log
 import pandas as pd
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ from theta_snapshot import (
     is_market_open,
     time_checker_ny,
     time_script,
+    iv_features,
 )
 
 
@@ -69,7 +71,8 @@ if __name__ == "__main__":
     )
 
     theta_df = pd.concat(snap_result)
-    theta_df = theta_df[(theta_df["calCost"] < 5) & (theta_df["calCost"] > 0.8)]
+    theta_df = theta_df[(theta_df["calCost"] < 5) & (theta_df["calCost"] > 0.5)]
+    log.success(f"Snapshot Completed: {theta_df.shape[0]} strategies")
 
     # --------------------------------------------------------------
     # Merge with Earnings Calendar and Grades
@@ -83,6 +86,9 @@ if __name__ == "__main__":
     # Merge calCost Table
     # --------------------------------------------------------------
     log.info("Fecthing calCostPctMean")
+    if len(theta_df) == 0:
+        log.warning("No data to process")
+        sys.exit("No data to process")
 
     # TODO: Check if histcalcostmean is the same as calCostPctMean
     calcost_query = """
@@ -116,6 +122,8 @@ if __name__ == "__main__":
     )
     iv_df = pd.concat(ivs)
 
+    theta_df = iv_features(theta_df, iv_df)
+
     # --------------------------------------------------------------
     # Write to DB
     # --------------------------------------------------------------
@@ -124,6 +132,12 @@ if __name__ == "__main__":
     write_to_db(iv_df, "ThetaIVSnapshot")
 
     log.info("Completed Snapshots and IVs")
+
+    # --------------------------------------------------------------
+    # Machine Learning
+    # --------------------------------------------------------------
+
+    # TODO: Add ML Code
 
     # --------------------------------------------------------------
     # Telegram
