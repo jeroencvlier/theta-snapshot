@@ -326,12 +326,16 @@ def time_checker_ny(target_hour=9, target_minute=34, break_Script=True):
             log.warning("Bypassing time check...")
 
 
-def time_script(func):
+def main_wrapper(func):
     def wrapper(*args, **kwargs):
-        start = round(dt.now().timestamp())
-        func(*args, **kwargs)
-        end = round(dt.now().timestamp())
-        time_taken = divmod((end - start), 60)
-        log.info(f"Time taken: {time_taken[0]} minutes, {time_taken[1]} seconds")
+        try:
+            start = round(dt.now().timestamp())
+            func(*args, **kwargs)
+            end = round(dt.now().timestamp())
+            time_taken = divmod((end - start), 60)
+            log.info(f"Time taken: {time_taken[0]} minutes, {time_taken[1]} seconds")
+        except Exception as err:
+            log.opt(exception=True).error(f"Error in {func.__name__}: {err}")
+            # TODO: add telegram alert to notify of error
 
     return wrapper

@@ -14,17 +14,14 @@ from theta_snapshot import (
     get_iv_chain,
     is_market_open,
     time_checker_ny,
-    time_script,
+    main_wrapper,
     iv_features,
+    send_telegram_alerts,
 )
 
 
-# @time_script
-# def main():
-
-if __name__ == "__main__":
-    load_dotenv(".env")
-
+@main_wrapper
+def main():
     is_market_open(break_Script=os.getenv("BREAK_SCRIPT") == "True")
     time_checker_ny(break_Script=os.getenv("BREAK_SCRIPT") == "True")
     # --------------------------------------------------------------
@@ -57,9 +54,8 @@ if __name__ == "__main__":
     # --------------------------------------------------------------
     # Generate Snapshot
     # --------------------------------------------------------------
-    log.info(
-        f"Scrapping Snapshot: {snap_df['symbol'].unique().shape[0]} symbols, {snap_df.shape[0]} strategies"
-    )
+    n_symbols = snap_df["symbol"].unique().shape[0]
+    log.info(f"Scrapping Snapshot: {n_symbols} symbols, {snap_df.shape[0]} strategies")
 
     inputs = [
         (snapshot, row["symbol"], row["reportDate"], row["weeks"], right)
@@ -110,6 +106,7 @@ if __name__ == "__main__":
 
     theta_df = theta_df.merge(calcost_df, on=["symbol", "bdte", "weeks"], how="inner")
     theta_df = oe.calculate_diffs(theta_df)
+    theta_df = oe.expected_calendar_price(theta_df)
 
     # --------------------------------------------------------------
     # Implied Volatility
@@ -125,6 +122,12 @@ if __name__ == "__main__":
     theta_df = iv_features(theta_df, iv_df)
 
     # --------------------------------------------------------------
+    # Machine Learning
+    # --------------------------------------------------------------
+
+    # TODO: Add ML Code
+
+    # --------------------------------------------------------------
     # Write to DB
     # --------------------------------------------------------------
     theta_df["lastUpdated"] = int(dt.now().timestamp())
@@ -134,14 +137,12 @@ if __name__ == "__main__":
     log.info("Completed Snapshots and IVs")
 
     # --------------------------------------------------------------
-    # Machine Learning
-    # --------------------------------------------------------------
-
-    # TODO: Add ML Code
-
-    # --------------------------------------------------------------
     # Telegram
     # --------------------------------------------------------------
     time_checker_ny(target_minute=44, break_Script=os.getenv("BREAK_SCRIPT") == "True")
+    send_telegram_alerts()
 
-    # main()
+
+if __name__ == "__main__":
+    load_dotenv(".env")
+    main()

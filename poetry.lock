@@ -766,13 +766,13 @@ files = [
 
 [[package]]
 name = "option-emporium"
-version = "0.0.40"
+version = "0.0.41"
 description = ""
 optional = false
 python-versions = "<3.13,>=3.9"
 files = [
-    {file = "option_emporium-0.0.40-py3-none-any.whl", hash = "sha256:9e4a4be8e77fe8a4c7e245dcf20632583759479b19cde4562a5c5e8e64eb1d10"},
-    {file = "option_emporium-0.0.40.tar.gz", hash = "sha256:dedd1dc69dbfc6eccfbc5125601af2f2dc5e4f1bae13a9c174261c71a26aefef"},
+    {file = "option_emporium-0.0.41-py3-none-any.whl", hash = "sha256:93ce53598a16dced3f3b34c6d800b894ff9bf7d6bdedcd9dfce5f5e08045fa8b"},
+    {file = "option_emporium-0.0.41.tar.gz", hash = "sha256:55bfb23c4239e7b0a286c6fd582ba298f9c3c462df0fd5e636962bcdad1452f5"},
 ]
 
 [package.dependencies]
@@ -1125,6 +1125,31 @@ files = [
 [package.extras]
 doc = ["sphinx (>=6.1.3,<6.2.0)", "sphinx_rtd_theme (>=1.2.0,<1.3.0)"]
 test = ["beautifulsoup4", "flake8", "pytest", "pytest-cov"]
+
+[[package]]
+name = "pytelegrambotapi"
+version = "4.25.0"
+description = "Python Telegram bot api."
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "pytelegrambotapi-4.25.0-py3-none-any.whl", hash = "sha256:2ccdbf407671caa09880055f83c1ff7df9a88933b51708b948dac56fc2988829"},
+    {file = "pytelegrambotapi-4.25.0.tar.gz", hash = "sha256:7b59969871cc008b3bc3526efb96d883b7c8eaca2a979e79b1e0269d27bf75e0"},
+]
+
+[package.dependencies]
+requests = "*"
+
+[package.extras]
+aiohttp = ["aiohttp"]
+coloredlogs = ["coloredlogs"]
+fastapi = ["fastapi"]
+json = ["ujson"]
+pil = ["pillow"]
+psutil = ["psutil"]
+redis = ["redis (>=3.4.1)"]
+uvicorn = ["uvicorn"]
+watchdog = ["watchdog"]
 
 [[package]]
 name = "python-dateutil"
@@ -1604,4 +1629,4 @@ dev = ["black (>=19.3b0)", "pytest (>=4.6.2)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.13"
-content-hash = "b63b5992d9bfd168fbc401b23c127ba661aa640d8a6688817cde15ad1925719a"
+content-hash = "8b27de04b1a915f63f66829189171d54c4fd858a4746988c58116ba292da9263"
