@@ -86,7 +86,7 @@ def main():
     log.info("Fecthing calCostPctMean")
     if len(theta_df) == 0:
         log.warning("No data to process")
-        sys.exit("No data to process")
+        return
 
     # TODO: Check if histcalcostmean is the same as calCostPctMean
     calcost_query = """

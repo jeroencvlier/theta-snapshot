@@ -162,7 +162,7 @@ def send_telegram_alerts():
 
     if alert_df.empty:
         log.info("No new alerts found")
-        sys.exit("No new alerts found")
+        return
 
     alert_df["alert_time"] = alert_df["lastUpdated"]
     alert_df["alert_date"] = alert_df["alert_time"].apply(
@@ -174,7 +174,7 @@ def send_telegram_alerts():
     alerts_df = alerts_df.drop_duplicates(subset=["symbol", "weeks"], keep="first")
     if len(alerts_df) == 0:
         log.info("No new alerts found")
-        sys.exit("No new alerts found")
+        return
 
     # --------------------------------------------------------------
     # Logic to check for previous alerts
@@ -205,7 +205,7 @@ def send_telegram_alerts():
 
     if len(new_alerts) == 0:
         log.info("No new alerts found")
-        sys.exit("No new alerts found")
+        return
 
     log.info(f"New Alerts: {len(new_alerts)}")
 
