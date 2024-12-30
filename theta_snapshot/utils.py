@@ -9,7 +9,6 @@ import sys
 
 # import logging
 import httpx
-import option_emporium as oe
 
 from loguru import logger as log
 
@@ -81,46 +80,6 @@ class CalendarSnapData:
 
 
 # --------------------------------------------------------------
-# Filter Functions
-# --------------------------------------------------------------
-
-
-def underlying_price_filter(df: pd.DataFrame, max_rows: int = 2):
-    assert "undPricePctDiff" in df.columns, "undPricePctDiff column not found"
-    df = df[(df["undPricePctDiff"] >= -0.003) & (df["undPricePctDiff"] <= 0.05)]
-    if len(df) > max_rows:
-        for i in range(20):
-            lower_bound = round(i * -0.00025, 6)
-            upper_bound = round(i * 0.003, 6)
-            if upper_bound > 0.05:
-                break
-            filtered_df = df[
-                (df["undPricePctDiff"] >= lower_bound) & (df["undPricePctDiff"] <= upper_bound)
-            ]
-            if len(filtered_df) >= max_rows:
-                df = filtered_df
-                break
-
-    if len(df) > max_rows:
-        df = df.head(max_rows)
-
-    return df
-
-
-def oi_filter(df: pd.DataFrame, min_oi: int = 20):
-    assert "open_interest_front" in df.columns, "open_interest_front column not found"
-    assert "open_interest_back" in df.columns, "open_interest_back column not found"
-    df = df[(df["open_interest_front"] > min_oi) & (df["open_interest_back"] > min_oi)]
-    return df
-
-
-def snapshot_filter(df: pd.DataFrame, min_oi: int = 20, max_rows: int = 2):
-    df = oi_filter(df, min_oi)
-    df = underlying_price_filter(df, max_rows)
-    return df
-
-
-# --------------------------------------------------------------
 # Database Functions
 # --------------------------------------------------------------
 
@@ -161,130 +120,8 @@ def write_to_db(
 
 
 # --------------------------------------------------------------
-# HTTPX Functions
-# --------------------------------------------------------------
-
-
-def request_pagination(url, params, max_retries=3, timeout=20.0):
-    """
-    Fetch paginated responses from an API.
-
-    Args:
-        url (str): The initial URL to request.
-        params (dict): Query parameters for the request.
-        max_retries (int): Maximum number of retries for transient errors.
-        timeout (float): Timeout for the HTTP request in seconds.
-
-    Returns:
-        tuple: A list of combined responses and the format header.
-    """
-    responses = []
-    retries = 0
-
-    while url is not None:
-        try:
-            # Make the HTTP request
-            response = httpx.get(url, params=params, timeout=timeout)
-            response.raise_for_status()  # Raise for HTTP errors
-
-            # Parse and append the response
-            data = response.json()
-            responses.extend(data.get("response", []))
-            # log.debug(f"Fetched {len(data.get('response', []))} items from {url}")
-
-            # Handle pagination
-            next_page = response.headers.get("Next-Page")
-            url = next_page if next_page and next_page != "null" else None
-
-        except httpx.RequestError as e:
-            log.error(f"Request error: {e}")
-            if retries < max_retries:
-                retries += 1
-                log.warning(f"Retrying... attempt {retries}")
-            else:
-                log.error("Max retries exceeded. Exiting pagination.")
-                break
-        except KeyError as e:
-            log.error(f"Key error: {e}. Response format may have changed.")
-            break
-        except Exception as e:
-            log.error(f"Unexpected error: {e}")
-            break
-
-    # Return responses and format header (if available)
-    format_header = data.get("header", {}).get("format", None) if "data" in locals() else None
-    return responses, format_header
-
-
-def get_expiry_dates(symbol):
-    params = {"root": symbol}
-    url = os.getenv("BASE_URL") + "/list/expirations"
-    responses, _ = request_pagination(url, params)
-    return responses
-
-
-def get_greeks(symbol: str, exp: int, right: str):
-    url = os.getenv("BASE_URL") + "/bulk_snapshot/option/greeks"
-    params = {"root": symbol, "exp": exp}
-    response, columns = request_pagination(url, params)
-    df = response_to_df(response, columns)
-    if right in ["C", "P"]:
-        df = df[df["right"] == right]
-    df.drop(columns=["ms_of_day2", "bid", "ask", "ms_of_day"], inplace=True)
-
-    return df
-
-
-def get_quote(symbol: str, exp: int, right: str):
-    url = os.getenv("BASE_URL") + "/bulk_snapshot/option/quote"
-    params = {"root": symbol, "exp": exp}
-    response, columns = request_pagination(url, params)
-    df = response_to_df(response, columns)
-    if right in ["C", "P"]:
-        df = df[df["right"] == right]
-    df.drop(
-        columns=["bid_condition", "bid_exchange", "ask_condition", "ask_exchange"],
-        inplace=True,
-    )
-    df = oe.calculate_mark(df)
-    return df
-
-
-def get_oi(symbol: str, exp: int, right: str):
-    url = os.getenv("BASE_URL") + "/bulk_snapshot/option/open_interest"
-    # log.info("Requesting port: %s", url)
-    params = {"root": symbol, "exp": exp}
-    response, columns = request_pagination(url, params)
-    df = response_to_df(response, columns)
-    if right in ["C", "P"]:
-        df = df[df["right"] == right]
-    df.drop(columns=["ms_of_day"], inplace=True)
-    return df
-
-
-# --------------------------------------------------------------
 # Helper Functions
 # --------------------------------------------------------------
-
-
-def response_to_df(response, columns):
-    rows = []
-    for item in response:
-        ticks = item["ticks"][0]
-        contract = item["contract"]
-        row = {**contract, **dict(zip(columns, ticks))}
-        rows.append(row)
-    df = pd.DataFrame(rows)
-    rename_dict = {
-        "strike": "strike_milli",
-        "underlying_price": "underlying",
-        "expiration": "exp",
-        "root": "symbol",
-    }
-    for k, v in rename_dict.items():
-        if k in df.columns:
-            df.rename(columns={k: v}, inplace=True)
-    return df
 
 
 def is_market_open(break_Script=True) -> bool:
@@ -339,3 +176,73 @@ def main_wrapper(func):
             # TODO: add telegram alert to notify of error
 
     return wrapper
+
+
+# --------------------------------------------------------------
+# s3BucketHandler
+# --------------------------------------------------------------
+
+
+# class S3Handler:
+#     def __init__(self, bucket_name=None, region=None, env_path=".env", log_level=logging.INFO):
+#         """
+#         Initialize AWS S3 connection using environment variables or parameters
+
+#         Args:
+#             bucket_name (str): Name of the S3 bucket
+#                            If not provided, will look for S3_BUCKET_NAME in environment variables
+#             region (str): AWS region (e.g., 'us-east-1')
+#                          If not provided, will look for AWS_REGION in environment variables
+#             env_path (str): Path to .env file (default: ".env")
+#             log_level (int): Logging level (default: logging.INFO)
+#         """
+#         # Set up logging
+#         self.logger = log.getLogger("S3Handler")
+#         self.logger.setLevel(log_level)
+
+#         if not self.logger.handlers:
+#             handler = logging.StreamHandler()
+#             formatter = logging.Formatter(
+#                 "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+#                 datefmt="%Y-%m-%d %H:%M:%S",
+#             )
+#             handler.setFormatter(formatter)
+#             self.logger.addHandler(handler)
+
+#         load_dotenv(env_path)
+
+#         # Get bucket name from parameter or environment
+#         self.bucket_name = bucket_name or os.getenv("S3_BUCKET_NAME")
+#         if not self.bucket_name:
+#             self.logger.error("Bucket name not provided")
+#             raise ValueError(
+#                 "Bucket name must be provided either as parameter or S3_BUCKET_NAME environment variable"
+#             )
+
+#         # Get region from parameter or environment
+#         self.region = region or os.getenv("AWS_REGION")
+#         if not self.region:
+#             self.logger.error("AWS region not provided")
+#             raise ValueError(
+#                 "AWS region must be provided either as parameter or AWS_REGION environment variable"
+#             )
+
+#         # Get credentials from environment
+#         self.access_key = os.getenv("AWS_ACCESS_KEY_ID")
+#         self.secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+
+#         if not self.access_key or not self.secret_key:
+#             self.logger.info("No explicit credentials provided, using AWS credential chain")
+
+#         self._log_config()
+
+#         # Initialize client
+#         self.session = boto3.session.Session()
+#         self.client = self.session.client(
+#             "s3",
+#             region_name=self.region,
+#             aws_access_key_id=self.access_key,
+#             aws_secret_access_key=self.secret_key,
+#         )
+
+#         self._verify_connection()

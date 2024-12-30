@@ -83,7 +83,7 @@ def get_iv_chain(symb):
         return symb_ivs
 
     except Exception as err:
-        log.error("Symbol: %s, Error: %s", symb, err)
+        log.error(f"Symbol: {symb}, Error: {err}")
 
 
 def iv_features(df: pd.DataFrame, iv_df: pd.DataFrame) -> pd.DataFrame:

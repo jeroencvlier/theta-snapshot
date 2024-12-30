@@ -28,7 +28,9 @@ def main():
     # Setup
     # --------------------------------------------------------------
     right = "C"
-    cpus = max(os.cpu_count() - 1, 20)
+    min_deposit = 0.5
+    max_deposit = 5
+    cpus = max(os.cpu_count(), 20)
     log.info(f"Available CPUs: {os.cpu_count()}, defaulting to {cpus} for parallelism.")
 
     # --------------------------------------------------------------
@@ -67,7 +69,7 @@ def main():
     )
 
     theta_df = pd.concat(snap_result)
-    theta_df = theta_df[(theta_df["calCost"] < 5) & (theta_df["calCost"] > 0.5)]
+    theta_df = theta_df[(theta_df["calCost"] < max_deposit) & (theta_df["calCost"] > min_deposit)]
     log.success(f"Snapshot Completed: {theta_df.shape[0]} strategies")
 
     # --------------------------------------------------------------
