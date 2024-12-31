@@ -141,7 +141,8 @@ def is_market_open(break_Script=True) -> bool:
 
     finally:
         if break_Script and not is_open:
-            sys.exit("Market is closed")
+            log.info("Market is closed")
+            sys.exit(0)
         else:
             log.warning("Bypassing market open check...")
             return is_open
@@ -158,7 +159,8 @@ def time_checker_ny(target_hour=9, target_minute=34, break_Script=True):
         log.info(f"{current_time_ny.strftime('%Y-%m-%d %H:%M:%S %Z')} -> Current Time")
         log.info(f"{target_time.strftime('%Y-%m-%d %H:%M:%S %Z')} -> Target Time")
         if break_Script:
-            sys.exit("Too early to run the script.")
+            log.info("Too early to run the script.")
+            sys.exit(0)
         else:
             log.warning("Bypassing time check...")
 
