@@ -295,7 +295,7 @@ class S3Handler:
             extra_args = {"ACL": "public-read" if make_public else "private"}
             s3_path = s3_path.lstrip("/")
 
-            log.info(f"Uploading {local_path} to {self.bucket_name}/{s3_path}")
+            # log.info(f"Uploading {local_path} to {self.bucket_name}/{s3_path}")
 
             with open(local_path, "rb") as f:
                 self.client.put_object(
