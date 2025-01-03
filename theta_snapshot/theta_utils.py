@@ -174,7 +174,7 @@ def get_greeks_historical(
     url = os.getenv("BASE_URL") + "/hist/option/greeks"
     params = {**base_params, "exp": exp, "strike": strike}
     df = multi_root_query_df(roots=roots, params=params, url=url)
-    if df.empty:
+    if df.empty or df is None:
         return None
     df = df.assign(
         strike_milli=strike,
@@ -200,7 +200,7 @@ def get_quotes_historical(
     url = os.getenv("BASE_URL") + "/hist/option/quote"
     params = {**base_params, "exp": exp, "strike": strike}
     df = multi_root_query_df(roots=roots, params=params, url=url)
-    if df.empty:
+    if df.empty or df is None:
         return None
 
     df = df.assign(
@@ -226,7 +226,7 @@ def get_oi_historical(
     url = os.getenv("BASE_URL") + "/hist/option/open_interest"
     params = {**base_params, "exp": exp, "strike": strike}
     df = multi_root_query_df(roots=roots, params=params, url=url)
-    if df.empty:
+    if df.empty or df is None:
         return None
     df = df.assign(
         strike_milli=strike,
