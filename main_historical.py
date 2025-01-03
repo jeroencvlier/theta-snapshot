@@ -56,7 +56,8 @@ ivl = 900000  # 15 minutes
 
 
 def get_folder_name(weeks) -> str:
-    return f"theta_calendar_{weeks}_weeks"
+    # return f"theta_calendar_{weeks}_weeks"
+    return f"data/s3_bucket/earnings/theta_calendar_{weeks}_weeks"
 
 
 bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
@@ -164,7 +165,7 @@ def thread_historical_queries(
         for strike in strikes
     ]
 
-    dfs = Parallel(n_jobs=min(len(inputs), 8), backend="threading", verbose=1)(
+    dfs = Parallel(n_jobs=min(len(inputs), 8), backend="threading", verbose=0)(
         delayed(func)(**kwargs) for kwargs in inputs
     )
     df = pd.concat(dfs)
@@ -338,7 +339,7 @@ def historical_snapshot(kwargs):
 if __name__ == "__main__":
     log.info(f"Total Inputs: {len(inputs)}")
 
-    _ = Parallel(n_jobs=-1, backend="threading", verbose=1)(
+    _ = Parallel(n_jobs=-1, backend="threading", verbose=5)(
         delayed(historical_snapshot)(kwargs) for kwargs in inputs
     )
 
