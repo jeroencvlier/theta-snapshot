@@ -301,7 +301,7 @@ class S3Handler:
                 self.client.put_object(
                     Bucket=self.bucket_name, Key=s3_path, Body=f.read(), **extra_args
                 )
-            log.info(f"Successfully uploaded {local_path} to {s3_path}")
+            # log.info(f"Successfully uploaded {local_path} to {s3_path}")
 
         except botocore.exceptions.ClientError as e:
             error = e.response.get("Error", {})
@@ -509,7 +509,7 @@ class S3Handler:
                 **extra_args,
             )
 
-            log.info(f"Successfully uploaded Table to {s3_path}")
+            # log.info(f"Successfully uploaded Table to {s3_path}")
 
         except Exception as e:
             log.error(f"Error uploading Table: {str(e)}")

@@ -258,6 +258,9 @@ def historical_snapshot(kwargs):
     max_und = und_df["underlying"].max()
     start_strikes = [s for s in so.strikes if (s / 1000) > (min_und * 0.93)]
     sliced_strikes = [s for s in start_strikes if (s / 1000) < (max_und * 1.07)]
+    if len(sliced_strikes) == 0:
+        log.info(f"No strikes found for {so.symbol}, {so.rdate}, {so.fexp}")
+        return pd.DataFrame
 
     # Greeks
     for fb in ["front", "back"]:
