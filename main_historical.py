@@ -216,6 +216,9 @@ def historical_snapshot(kwargs):
     so.f_dates = get_exp_trading_days(roots=so.roots, exp=so.fexp)
     so.b_dates = get_exp_trading_days(roots=so.roots, exp=so.bexp)
     so.trade_dates = sorted(list(set(so.f_dates) & set(so.b_dates)))
+    if len(so.trade_dates) < 7:
+        log.warning(f"Trading dates are less than 7 for {so.symbol}, {so.rdate}, {so.fexp}")
+        return pd.DataFrame
 
     # Strikes
     so.f_strikes = get_strikes_exp(roots=so.roots, exp=so.fexp)
