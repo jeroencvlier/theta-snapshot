@@ -338,11 +338,11 @@ def historical_snapshot(kwargs):
 if __name__ == "__main__":
     log.info(f"Total Inputs: {len(inputs)}")
 
-    # _ = Parallel(n_jobs=6, backend="threading", verbose=1)(
-    #     delayed(historical_snapshot)(kwargs) for kwargs in inputs
-    # )
+    _ = Parallel(n_jobs=-1, backend="threading", verbose=1)(
+        delayed(historical_snapshot)(kwargs) for kwargs in inputs
+    )
 
     log.success("All Done")
-    for i in inputs:
-        kwargs = i
-        historical_snapshot(i)
+    # for i in inputs:
+    #     kwargs = i
+    #     historical_snapshot(i)
