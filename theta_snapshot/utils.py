@@ -489,7 +489,7 @@ class S3Handler:
         """
         try:
             s3_path = s3_path.lstrip("/")
-            log.info(f"Uploading PyArrow Table to {self.bucket_name}/{s3_path}")
+            # log.info(f"Uploading PyArrow Table to {self.bucket_name}/{s3_path}")
 
             # Create a buffer and write the table to it
             buffer = io.BytesIO()
