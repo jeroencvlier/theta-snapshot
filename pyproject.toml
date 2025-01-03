@@ -25,6 +25,7 @@ pandas-market-calendars = "^4.4.2"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
+missingno = "^0.5.2"
 
 [build-system]
 requires = ["poetry-core"]

@@ -17,7 +17,7 @@ from theta_snapshot import (
 pd.set_option("display.max_columns", None)
 
 
-def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
+def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C", roots: list = None):
     # symbol = "HUM"
     # date_string = "2025-01-23 00:00:00"
     # weeks = 2
@@ -25,7 +25,10 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     # right = "C"
 
     # --------------------------------------------------------------
-    so = CalendarSnapData(symbol=symbol, rdatedt=rdate, weeks=weeks, right=right)
+    if roots is None:
+        roots = [symbol]
+
+    so = CalendarSnapData(symbol=symbol, roots=roots, rdatedt=rdate, weeks=weeks, right=right)
 
     # --------------------------------------------------------------
     # Expiration Dates
@@ -41,11 +44,7 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
     )
 
     if so.bexp is None:
-        log.warning(f"No back expiration date found for {so.symbol}")
-        expiration_sought = (so.fexpdt + pd.DateOffset(days=(so.weeks * 7))).strftime("%Y%m%d")
-        log.info(f"Expiration Sought: {expiration_sought}")
-        log.info(f"Expirations: {cal_dates}")
-        log.info(f"DataClass: \n{so}")
+        log.info(f"No back expiration date found for {so.symbol}")
         return pd.DataFrame()
 
     if (so.fexpdt - so.rdatedt).days >= 7:
@@ -64,7 +63,23 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C"):
         (get_oi_snapshot, so, "front"),
         (get_oi_snapshot, so, "back"),
     ]
+
+    # get_quote_snapshot(so, "front")
     _ = Parallel(n_jobs=6, backend="threading")(delayed(func)(*args) for func, *args in inputs)
+
+    # if any are None then return empty DataFrame
+    if any(
+        [
+            so.greeks_front is None,
+            so.greeks_back is None,
+            so.quotes_front is None,
+            so.quotes_back is None,
+            so.oi_front is None,
+            so.oi_back is None,
+        ]
+    ):
+        log.warning(f"Snapshot data is missing for {so.symbol}, dropping the symbol")
+        return pd.DataFrame()
 
     so.greeks = merge_snapshot(so.greeks_front, so.greeks_back)
     so.quotes = merge_snapshot(so.quotes_front, so.quotes_back)

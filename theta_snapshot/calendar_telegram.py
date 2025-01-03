@@ -72,7 +72,7 @@ cal_gap_pct = {"1": 0.1, "2": 0.175, "3": 0.25, "4": 0.325, "5": 0.40, "6": 0.47
 min_oi = 5
 pct_under_over_mean = -0.05
 min_spread = 0.3
-min_cal_spread = 0.5
+min_cal_spread = 0.6
 min_cost = 0.5
 max_cost = 5
 

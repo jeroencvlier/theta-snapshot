@@ -59,13 +59,25 @@ def main():
     n_symbols = snap_df["symbol"].unique().shape[0]
     log.info(f"Scrapping Snapshot: {n_symbols} symbols, {snap_df.shape[0]} strategies")
 
+    # inputs = [
+    #     (snapshot, row["symbol"], row["reportDate"], row["weeks"], right)
+    #     for _, row in snap_df.iterrows()
+    # ]
+
+    # generate inputs as kwargs for snapshot function
+
     inputs = [
-        (snapshot, row["symbol"], row["reportDate"], row["weeks"], right)
+        {
+            "symbol": row["symbol"],
+            "rdate": row["reportDate"],
+            "weeks": row["weeks"],
+            "right": right,
+        }
         for _, row in snap_df.iterrows()
     ]
 
     snap_result = Parallel(n_jobs=cpus, backend="loky", verbose=2)(
-        delayed(func)(*args) for func, *args in inputs
+        delayed(snapshot)(**kwargs) for kwargs in inputs
     )
 
     theta_df = pd.concat(snap_result)

@@ -33,16 +33,19 @@ def request_pagination(url, params, max_retries=3, timeout=20.0):
         try:
             # Make the HTTP request
             response = httpx.get(url, params=params, timeout=timeout)
-            response.raise_for_status()  # Raise for HTTP errors
 
-            # Parse and append the response
-            data = response.json()
-            responses.extend(data.get("response", []))
-            # log.debug(f"Fetched {len(data.get('response', []))} items from {url}")
+            if response.status_code == 472:
+                break
+            else:
+                response.raise_for_status()  # Raise for HTTP errors
 
-            # Handle pagination
-            next_page = response.headers.get("Next-Page")
-            url = next_page if next_page and next_page != "null" else None
+                # Parse and append the response
+                data = response.json()
+                responses.extend(data.get("response", []))
+
+                # Handle pagination
+                next_page = response.headers.get("Next-Page")
+                url = next_page if next_page and next_page != "null" else None
 
         except httpx.RequestError as e:
             log.error(f"Request error: {e}")
@@ -58,10 +61,37 @@ def request_pagination(url, params, max_retries=3, timeout=20.0):
         except Exception as e:
             log.error(f"Unexpected error: {e}")
             break
-
+    if len(responses) == 0:
+        return [], None
     # Return responses and format header (if available)
     format_header = data.get("header", {}).get("format", None) if "data" in locals() else None
     return responses, format_header
+
+
+# --------------------------------------------------------------
+# Multi Root Query Unpacking
+# --------------------------------------------------------------
+def multi_root_query_df(roots: List[str], params: dict, url: str):
+    if not isinstance(roots, list):
+        roots = [roots]
+    responses_dfs = []
+    for root in roots:
+        params["root"] = root
+        response, columns = request_pagination(url, params)
+        df = response_to_df(response, columns)
+        responses_dfs.append(df)
+    return pd.concat(responses_dfs)
+
+
+def multi_root_query_list(roots: List[str], params: dict, url: str):
+    if not isinstance(roots, list):
+        roots = [roots]
+    responses_list = []
+    for root in roots:
+        params["root"] = root
+        response, _ = request_pagination(url, params)
+        responses_list.extend(response)
+    return sorted(list(set(responses_list)))
 
 
 # --------------------------------------------------------------
@@ -69,16 +99,16 @@ def request_pagination(url, params, max_retries=3, timeout=20.0):
 # --------------------------------------------------------------
 
 
-def get_expiry_dates(symbol):
-    params = {"root": symbol}
+def get_expiry_dates(roots: List[str]):
     url = os.getenv("BASE_URL") + "/list/expirations"
-    responses, _ = request_pagination(url, params)
-    return responses
+    params = {}
+    exp_dates = multi_root_query_list(roots=roots, params=params, url=url)
+    return exp_dates
 
 
 def get_greeks(symbol: str, exp: int, right: str):
     url = os.getenv("BASE_URL") + "/bulk_snapshot/option/greeks"
-    params = {"root": symbol, "exp": exp}
+    params = {"root": symbol, "exp": exp, "right": right}
     response, columns = request_pagination(url, params)
     df = response_to_df(response, columns)
     if right in ["C", "P"]:
@@ -90,7 +120,7 @@ def get_greeks(symbol: str, exp: int, right: str):
 
 def get_quote(symbol: str, exp: int, right: str):
     url = os.getenv("BASE_URL") + "/bulk_snapshot/option/quote"
-    params = {"root": symbol, "exp": exp}
+    params = {"root": symbol, "exp": exp, "right": right}
     response, columns = request_pagination(url, params)
     df = response_to_df(response, columns)
     if right in ["C", "P"]:
@@ -106,12 +136,104 @@ def get_quote(symbol: str, exp: int, right: str):
 def get_oi(symbol: str, exp: int, right: str):
     url = os.getenv("BASE_URL") + "/bulk_snapshot/option/open_interest"
     # log.info("Requesting port: %s", url)
-    params = {"root": symbol, "exp": exp}
+    params = {"root": symbol, "exp": exp, "right": right}
     response, columns = request_pagination(url, params)
     df = response_to_df(response, columns)
     if right in ["C", "P"]:
         df = df[df["right"] == right]
     df.drop(columns=["ms_of_day", "date"], inplace=True)
+    return df
+
+
+# --------------------------------------------------------------
+# Historical Snapshot Functions
+# --------------------------------------------------------------
+
+
+def get_exp_trading_days(roots, exp):
+    url = os.getenv("BASE_URL") + "/list/dates/option/quote"
+    params = {"exp": exp}
+    trading_days = multi_root_query_list(roots=roots, params=params, url=url)
+    return trading_days
+
+
+def get_strikes_exp(roots, exp):
+    url = os.getenv("BASE_URL") + "/list/strikes"
+    params = {"exp": exp}
+    strike_list = multi_root_query_list(roots=roots, params=params, url=url)
+    return strike_list
+
+
+def get_greeks_historical(
+    symbol: str,
+    roots: str,
+    exp: int,
+    strike: int,
+    base_params: dict,
+):
+    url = os.getenv("BASE_URL") + "/hist/option/greeks"
+    params = {**base_params, "exp": exp, "strike": strike}
+    df = multi_root_query_df(roots=roots, params=params, url=url)
+    if df.empty:
+        return None
+    df = df.assign(
+        strike_milli=strike,
+        exp=exp,
+        right=base_params["right"],
+        symbol=symbol,
+    )
+    df.drop(
+        # columns=["bid_condition", "bid_exchange", "ask_condition", "ask_exchange"],
+        columns=["bid", "ask"],
+        inplace=True,
+    )
+    return df
+
+
+def get_quotes_historical(
+    symbol: str,
+    roots: str,
+    exp: int,
+    strike: int,
+    base_params: dict,
+):
+    url = os.getenv("BASE_URL") + "/hist/option/quote"
+    params = {**base_params, "exp": exp, "strike": strike}
+    df = multi_root_query_df(roots=roots, params=params, url=url)
+    if df.empty:
+        return None
+
+    df = df.assign(
+        strike_milli=strike,
+        exp=exp,
+        right=base_params["right"],
+        symbol=symbol,
+    )
+    df.drop(
+        columns=["bid_condition", "bid_exchange", "ask_condition", "ask_exchange"],
+        inplace=True,
+    )
+    return df
+
+
+def get_oi_historical(
+    symbol: str,
+    roots: str,
+    exp: int,
+    strike: int,
+    base_params: dict,
+):
+    url = os.getenv("BASE_URL") + "/hist/option/open_interest"
+    params = {**base_params, "exp": exp, "strike": strike}
+    df = multi_root_query_df(roots=roots, params=params, url=url)
+    if df.empty:
+        return None
+    df = df.assign(
+        strike_milli=strike,
+        exp=exp,
+        right=base_params["right"],
+        symbol=symbol,
+    )
     return df
 
 
@@ -167,12 +289,17 @@ def merge_snapshot(front, back):
 # --------------------------------------------------------------
 
 
+# TODO: Check why responses are different and stanardise this function
 def response_to_df(response, columns):
     rows = []
     for item in response:
-        ticks = item["ticks"][0]
-        contract = item["contract"]
-        row = {**contract, **dict(zip(columns, ticks))}
+        if "ticks" in item:
+            ticks = item["ticks"][0]
+        if "contract" in item:
+            contract = item["contract"]
+            row = {**contract, **dict(zip(columns, ticks))}
+        else:
+            row = dict(zip(columns, item))
         rows.append(row)
     df = pd.DataFrame(rows)
     rename_dict = {
