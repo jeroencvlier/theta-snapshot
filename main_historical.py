@@ -246,6 +246,7 @@ def historical_snapshot(kwargs):
     min_und = und_df["underlying"].min()
     max_und = und_df["underlying"].max()
     del und_df
+
     start_strikes = [s for s in so.strikes if (s / 1000) > (min_und * 0.94)]
     sliced_strikes = [s for s in start_strikes if (s / 1000) < (max_und * 1.06)]
     if len(sliced_strikes) == 0:
@@ -379,11 +380,8 @@ if __name__ == "__main__":
 
     log.info(f"Total Inputs: {len(inputs)}")
 
-    _ = Parallel(n_jobs=os.cpu_count(), backend="multiprocessing", verbose=20)(
+    _ = Parallel(n_jobs=os.cpu_count(), backend="multiprocessing", verbose=10)(
         delayed(historical_snapshot)(kwargs) for kwargs in inputs
     )
 
     log.success("All Done")
-
-    # for i in inputs:
-    #     historical_snapshot(i)
