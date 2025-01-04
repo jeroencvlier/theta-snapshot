@@ -3,7 +3,7 @@ from loguru import logger as log
 import pandas as pd
 from joblib import Parallel, delayed
 import pyarrow as pa
-
+from tqdm import tqdm
 
 from theta_snapshot import (
     CalendarSnapData,
@@ -27,20 +27,20 @@ def get_quarter(date):
     return f"{year}Q{fiscal_quart}"
 
 
-def add_quarter(quarter_str):
-    # Split the year and quarter
-    year = int(quarter_str[:4])
-    quarter = int(quarter_str[-1])
+# def add_quarter(quarter_str):
+#     # Split the year and quarter
+#     year = int(quarter_str[:4])
+#     quarter = int(quarter_str[-1])
 
-    # Add one quarter
-    if quarter < 4:
-        quarter += 1
-    else:
-        quarter = 1
-        year += 1
+#     # Add one quarter
+#     if quarter < 4:
+#         quarter += 1
+#     else:
+#         quarter = 1
+#         year += 1
 
-    # Return the new quarter string
-    return f"{year}Q{quarter}"
+#     # Return the new quarter string
+#     return f"{year}Q{quarter}"
 
 
 # --------------------------------------------------------------
@@ -363,10 +363,8 @@ def historical_snapshot(kwargs):
 
 
 if __name__ == "__main__":
-    log.info(f"Total Inputs: {len(inputs)}")
-
-    _ = Parallel(n_jobs=os.cpu_count(), backend="threading", verbose=10)(
-        delayed(historical_snapshot)(kwargs) for kwargs in inputs
+    _ = Parallel(n_jobs=4, backend="threading", verbose=5)(
+        delayed(historical_snapshot)(kwargs) for kwargs in tqdm(inputs)
     )
 
     log.success("All Done")
