@@ -97,18 +97,22 @@ sc_df = sc_df[sc_df["last_entry"] >= first_dates]
 # --------------------------------------------------------------
 grade_query = '''SELECT symbol, under_avg_trade_class, weeks FROM public."StockGrades"'''
 grades = read_from_db(query=grade_query)
-grades = grades.groupby("symbol")["under_avg_trade_class"].mean().sort_values(ascending=False).reset_index()
+grades = (
+    grades.groupby("symbol")["under_avg_trade_class"]
+    .mean()
+    .sort_values(ascending=False)
+    .reset_index()
+)
 
 sorted_symbols = []
 for idx, row in grades.iterrows():
     if row["symbol"] in symbols:
         sorted_symbols.append(row["symbol"])
-        
+
 for symbol in symbols:
     if symbol not in sorted_symbols:
         sorted_symbols.append(symbol)
-    
-    
+
 
 # --------------------------------------------------------------
 # Prepare inputs for the multi-processors
@@ -152,7 +156,6 @@ for symbol in sorted_symbols:
                 }
                 if kwargs["filepath"] not in existing_files[weeks]:
                     inputs.append(kwargs)
-
 
 
 def thread_historical_queries(
@@ -221,7 +224,6 @@ def historical_snapshot(kwargs):
         weeks_between_fb=so.weeks,
     )
     if so.bexp is None:
-        log.warning(f"No back expiration date found for {so.symbol}")
         return
 
     if (so.fexpdt - so.rdatedt).days >= 5:
@@ -233,7 +235,6 @@ def historical_snapshot(kwargs):
     so.b_dates = get_exp_trading_days(roots=so.roots, exp=so.bexp)
     so.trade_dates = sorted(list(set(so.f_dates) & set(so.b_dates)))
     if len(so.trade_dates) < 7:
-        log.warning(f"Trading dates are less than 7 for {so.symbol}, {so.rdate}, {so.fexp}")
         return
 
     # Strikes
@@ -258,13 +259,12 @@ def historical_snapshot(kwargs):
         base_params=base_params,
     )
     if und_df is None:
-        log.warning(f"Underlying Price is missing for {so.symbol}, {so.rdate}, {so.fexp}")
         return
 
     und_df = und_df[["underlying"]]
 
     if len(und_df[und_df["underlying"] == 0]) > 0:
-        log.warning(
+        log.info(
             f"Underlying Price contains zero: {so.symbol}, {so.rdate}, {so.fexp}, Amount: {len(und_df[und_df['underlying'] == 0])}"
         )
         und_df = und_df[und_df["underlying"] == 0]
@@ -275,6 +275,7 @@ def historical_snapshot(kwargs):
     # Find bounds for strikes
     min_und = und_df["underlying"].min()
     max_und = und_df["underlying"].max()
+    del und_df
     start_strikes = [s for s in so.strikes if (s / 1000) > (min_und * 0.94)]
     sliced_strikes = [s for s in start_strikes if (s / 1000) < (max_und * 1.06)]
     if len(sliced_strikes) == 0:
@@ -307,7 +308,7 @@ def historical_snapshot(kwargs):
             so.oi_back is None,
         ]
     ):
-        log.warning(f"Snapshot data is missing for {so.symbol}, dropping the symbol")
+        log.info(f"Snapshot data is missing for {so.symbol}, dropping the symbol")
         return
 
     so.greeks = merge_historical_snapshot(so.greeks_front, so.greeks_back)
@@ -316,7 +317,7 @@ def historical_snapshot(kwargs):
     for attr_name, fb in [("oi_front", "Front"), ("oi_back", "Back")]:
         attr_data = getattr(so, attr_name, None)
         if attr_data[["strike_milli", "date"]].value_counts().max() > 1:
-            log.warning(f"Duplicate values found in OI {fb}: {so.symbol}, {so.rdate}, {so.fexp}")
+            log.info(f"Duplicate values found in OI {fb}: {so.symbol}, {so.rdate}, {so.fexp}")
             attr_data = attr_data.sort_values(["ms_of_day", "date"]).drop_duplicates(
                 subset=["strike_milli", "date"], keep="first"
             )
@@ -353,16 +354,18 @@ def historical_snapshot(kwargs):
         fiscalQuarterEnding=kwargs["fiscalQuarterEnding"],
         rQuarter=kwargs["rQuarter"],
     )
-    if not df.empty:
-        if len(df["date"].unique()) > 5:
-            table = pa.Table.from_pandas(df)
-            bucket.upload_table(table, f"{kwargs['filepath']}")
+    if df.empty:
+        return
+
+    if len(df["date"].unique()) > 5:
+        table = pa.Table.from_pandas(df)
+        bucket.upload_table(table, f"{kwargs['filepath']}")
 
 
 if __name__ == "__main__":
     log.info(f"Total Inputs: {len(inputs)}")
 
-    _ = Parallel(n_jobs=-1, backend="threading", verbose=10)(
+    _ = Parallel(n_jobs=os.cpu_count(), backend="threading", verbose=10)(
         delayed(historical_snapshot)(kwargs) for kwargs in inputs
     )
 
