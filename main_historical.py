@@ -111,7 +111,7 @@ def prepare_inputs():
                 for weeks in week_list:
                     kwargs = {
                         "symbol": symbol,
-                        "rdate": row["reportDate"],
+                        "rdate": row["reportDate"].strftime("%Y-%m-%d"),
                         "weeks": weeks,
                         "right": right,
                         "roots": roots,
@@ -121,6 +121,7 @@ def prepare_inputs():
                         "epsForecast": row["epsForecast"],
                         "fiscalQuarterEnding": row["fiscalQuarterEnding"],
                         "rQuarter": get_quarter(row["reportDate"]),
+                        "ivl": ivl,
                     }
                     if kwargs["filepath"] not in existing_files[weeks]:
                         inputs.append(kwargs)
@@ -180,11 +181,11 @@ def historical_snapshot(kwargs):
     so = CalendarSnapData(
         symbol=kwargs["symbol"],
         roots=kwargs["roots"],
-        rdatedt=kwargs["rdate"],
+        rdatedt=pd.Timestamp(kwargs["rdate"]),
         weeks=kwargs["weeks"],
         right=kwargs["right"],
     )
-
+    bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
     expirations = get_expiry_dates(so.roots)
     cal_dates = [d for d in expirations if d >= so.rdate]
     so.fexp = min(cal_dates)
@@ -194,17 +195,17 @@ def historical_snapshot(kwargs):
         weeks_between_fb=so.weeks,
     )
     if so.bexp is None:
-        sys.exit(0)
+        return
 
     if (so.fexpdt - so.rdatedt).days >= 7:
-        sys.exit(0)
+        return
 
     # Trading dates
     so.f_dates = get_exp_trading_days(roots=so.roots, exp=so.fexp)
     so.b_dates = get_exp_trading_days(roots=so.roots, exp=so.bexp)
     so.trade_dates = sorted(list(set(so.f_dates) & set(so.b_dates)))
     if len(so.trade_dates) < 5:
-        sys.exit(0)
+        return
 
     # Strikes
     so.f_strikes = get_strikes_exp(roots=so.roots, exp=so.fexp)
@@ -216,7 +217,7 @@ def historical_snapshot(kwargs):
         "start_date": str(min(so.trade_dates)),
         "end_date": str(max(so.trade_dates)),
         "right": so.right,
-        "ivl": str(ivl),
+        "ivl": str(kwargs["ivl"]),
     }
 
     # Underlying
@@ -228,7 +229,7 @@ def historical_snapshot(kwargs):
         base_params=base_params,
     )
     if und_df is None:
-        sys.exit(0)
+        return
 
     und_df = und_df[["underlying"]]
 
@@ -239,7 +240,7 @@ def historical_snapshot(kwargs):
         und_df = und_df[und_df["underlying"] != 0]
         if len(und_df) == 0:
             log.error(f"No data to process for {so.symbol}, {so.rdate}, {so.fexp}")
-            sys.exit(0)
+            return
 
     # Find bounds for strikes
     min_und = und_df["underlying"].min()
@@ -278,7 +279,7 @@ def historical_snapshot(kwargs):
         ]
     ):
         log.info(f"Snapshot data is missing for {so.symbol}, dropping the symbol")
-        sys.exit(0)
+        return
 
     so.greeks = merge_historical_snapshot(so.greeks_front, so.greeks_back)
     so.quotes = merge_historical_snapshot(so.quotes_front, so.quotes_back)
@@ -324,7 +325,7 @@ def historical_snapshot(kwargs):
         rQuarter=kwargs["rQuarter"],
     )
     if df.empty:
-        sys.exit(0)
+        return
 
     if len(df["date"].unique()) > 5:
         table = pa.Table.from_pandas(df)
@@ -378,8 +379,11 @@ if __name__ == "__main__":
 
     log.info(f"Total Inputs: {len(inputs)}")
 
-    _ = Parallel(n_jobs=4, backend="threading", verbose=10)(
+    _ = Parallel(n_jobs=os.cpu_count(), backend="multiprocessing", verbose=20)(
         delayed(historical_snapshot)(kwargs) for kwargs in inputs
     )
 
     log.success("All Done")
+
+    # for i in inputs:
+    #     historical_snapshot(i)

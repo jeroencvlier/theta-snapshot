@@ -13,7 +13,7 @@ from theta_snapshot import CalendarSnapData
 # --------------------------------------------------------------
 
 
-def request_pagination(url, params, max_retries=3, timeout=20.0):
+def request_pagination(url, params, max_retries=10, timeout=120.0):
     """
     Fetch paginated responses from an API.
 

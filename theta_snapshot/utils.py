@@ -196,7 +196,7 @@ def main_wrapper(func):
 
 
 class S3Handler:
-    def __init__(self, bucket_name=None, region=None, env_path=".env"):
+    def __init__(self, bucket_name=None, region=None, create_logs=False):
         # ), log_level=logging.INFO):
         """
         Initialize AWS S3 connection using environment variables or parameters
@@ -223,6 +223,7 @@ class S3Handler:
         #     log.addHandler(handler)
 
         # load_dotenv(env_path)
+        self.create_logs = create_logs
 
         # Get bucket name from parameter or environment
         self.bucket_name = bucket_name or os.getenv("S3_BUCKET_NAME")
@@ -247,7 +248,8 @@ class S3Handler:
         if not self.access_key or not self.secret_key:
             log.info("No explicit credentials provided, using AWS credential chain")
 
-        self._log_config()
+        if self.create_logs:
+            self._log_config()
 
         # Initialize client
         self.session = boto3.session.Session()
@@ -257,7 +259,6 @@ class S3Handler:
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key,
         )
-
         self._verify_connection()
 
     def _log_config(self):
@@ -274,7 +275,8 @@ class S3Handler:
         """Verify connection and bucket access"""
         try:
             self.client.head_bucket(Bucket=self.bucket_name)
-            log.info(f"Successfully connected to bucket: {self.bucket_name}")
+            if self.create_logs:
+                log.info(f"Successfully connected to bucket: {self.bucket_name}")
         except botocore.exceptions.ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             error_msg = f"Error accessing bucket: {str(e)}"
@@ -351,7 +353,7 @@ class S3Handler:
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
             self.client.download_file(self.bucket_name, s3_path, local_path)
-            log.info(f"Successfully downloaded {s3_path} to {local_path}")
+            # log.info(f"Successfully downloaded {s3_path} to {local_path}")
 
         except botocore.exceptions.ClientError as e:
             error = e.response.get("Error", {})
@@ -368,7 +370,8 @@ class S3Handler:
         """Write DataFrame directly to S3"""
         try:
             s3_path = s3_path.lstrip("/")
-            log.info(f"Writing DataFrame to {self.bucket_name}/{s3_path}")
+
+            # log.info(f"Writing DataFrame to {self.bucket_name}/{s3_path}")
 
             buffer = io.BytesIO()
 
@@ -397,7 +400,7 @@ class S3Handler:
                 ContentType=content_type,
             )
 
-            log.info(f"Successfully wrote DataFrame to {s3_path}")
+            # log.info(f"Successfully wrote DataFrame to {s3_path}")
 
         except Exception as e:
             log.error(f"Error writing DataFrame: {str(e)}")
@@ -407,7 +410,7 @@ class S3Handler:
         """Read DataFrame from S3"""
         try:
             s3_path = s3_path.lstrip("/")
-            log.info(f"Reading DataFrame from {self.bucket_name}/{s3_path}")
+            # log.info(f"Reading DataFrame from {self.bucket_name}/{s3_path}")
 
             response = self.client.get_object(Bucket=self.bucket_name, Key=s3_path)
             buffer = io.BytesIO(response["Body"].read())
@@ -421,7 +424,7 @@ class S3Handler:
             else:
                 raise ValueError(f"Unsupported format: {format}")
 
-            log.info(f"Successfully read DataFrame from {s3_path}")
+            # log.info(f"Successfully read DataFrame from {s3_path}")
             return df
 
         except Exception as e:
@@ -436,20 +439,20 @@ class S3Handler:
 
         try:
             s3_path = s3_path.lstrip("/")
-            log.info(f"Appending DataFrame to {self.bucket_name}/{s3_path}")
+            # log.info(f"Appending DataFrame to {self.bucket_name}/{s3_path}")
 
             try:
                 existing_df = self.read_dataframe(s3_path, format="csv")
                 combined_df = pd.concat([existing_df, df], ignore_index=True)
             except botocore.exceptions.ClientError as e:
                 if e.response["Error"]["Code"] == "NoSuchKey":
-                    log.info("File doesn't exist, creating new file")
+                    # log.info("File doesn't exist, creating new file")
                     combined_df = df
                 else:
                     raise
 
             self.write_dataframe(combined_df, s3_path, format="csv", **kwargs)
-            log.info(f"Successfully appended DataFrame to {s3_path}")
+            # log.info(f"Successfully appended DataFrame to {s3_path}")
 
         except Exception as e:
             log.error(f"Error appending DataFrame: {str(e)}")
