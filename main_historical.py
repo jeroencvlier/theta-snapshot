@@ -3,7 +3,7 @@ from loguru import logger as log
 import pandas as pd
 from joblib import Parallel, delayed
 import pyarrow as pa
-from tqdm import tqdm
+import sys
 
 from theta_snapshot import (
     CalendarSnapData,
@@ -44,118 +44,88 @@ def get_quarter(date):
 
 
 # --------------------------------------------------------------
-# Input Parameters
-# --------------------------------------------------------------
-week_list = [1, 2, 3, 4, 5]
-first_dates = pd.Timestamp("2016-01-01")  # Standard subscription
-ivl = 900000  # 15 minutes
-
-# --------------------------------------------------------------
 # S3 Bucket preparation
 # --------------------------------------------------------------
 
 
-def get_folder_name(weeks) -> str:
+def get_folder_name(weeks, right) -> str:
     # return f"theta_calendar_{weeks}_weeks"
-    return f"data/s3_bucket/earnings/theta_calendar_{weeks}_weeks"
+    return f"data/raw/calendar/calendar_{right}_{weeks}_weeks"
 
-
-bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
-
-existing_files = {w: bucket.list_files(f"{get_folder_name(w)}/") for w in week_list}
-
-
-# --------------------------------------------------------------
-# Setup historical earnings dates for qualified symbols
-# --------------------------------------------------------------
-
-symbols_df = read_from_db(query='SELECT symbol FROM "qualifiedSymbols"')
-symbols = symbols_df["symbol"].unique().tolist()
-earnings = read_from_db(
-    query=f'SELECT * FROM "nasdaqHistoricalEarnings" WHERE "symbol" IN {tuple(symbols)}'
-)
-earnings["reportDate"] = pd.to_datetime(earnings["reportDate"])
-earnings = earnings[earnings["reportDate"] >= first_dates]
-
-# TODO: Increase the historical earnings dates to 2016
-
-# --------------------------------------------------------------
-# Prepare symbols that have changed
-# --------------------------------------------------------------
-sc_df = read_from_db(query=f"""SELECT * FROM "changesPolygon" WHERE "symbol" IN {tuple(symbols)}""")
-sc_df["entries"] = sc_df.groupby("symbol")["symbol"].transform("count")
-sc_df = sc_df[sc_df["entries"] >= 2]
-
-sc_df["last_entry"] = sc_df.groupby("symbol")["date"].transform("max")
-sc_df["last_entry"] = pd.to_datetime(sc_df["last_entry"], format="%Y-%m-%d")
-sc_df = sc_df[sc_df["last_entry"] >= first_dates]
-
-# sc_df[sc_df["symbol"] == "META"]
 
 # --------------------------------------------------------------
 # Get priority symbols
 # --------------------------------------------------------------
-grade_query = '''SELECT symbol, under_avg_trade_class, weeks FROM public."StockGrades"'''
-grades = read_from_db(query=grade_query)
-grades = (
-    grades.groupby("symbol")["under_avg_trade_class"]
-    .mean()
-    .sort_values(ascending=False)
-    .reset_index()
-)
 
-sorted_symbols = []
-for idx, row in grades.iterrows():
-    if row["symbol"] in symbols:
-        sorted_symbols.append(row["symbol"])
 
-for symbol in symbols:
-    if symbol not in sorted_symbols:
-        sorted_symbols.append(symbol)
+def get_priority_symbols():
+    grade_query = '''SELECT symbol, under_avg_trade_class, weeks FROM public."StockGrades"'''
+    grades = read_from_db(query=grade_query)
+    grades = (
+        grades.groupby("symbol")["under_avg_trade_class"]
+        .mean()
+        .sort_values(ascending=False)
+        .reset_index()
+    )
+
+    sorted_symbols = []
+    for idx, row in grades.iterrows():
+        if row["symbol"] in symbols:
+            sorted_symbols.append(row["symbol"])
+
+    for symbol in symbols:
+        if symbol not in sorted_symbols:
+            sorted_symbols.append(symbol)
+
+    return sorted_symbols
 
 
 # --------------------------------------------------------------
 # Prepare inputs for the multi-processors
 # --------------------------------------------------------------
-inputs = []
+def prepare_inputs():
+    inputs = []
 
+    for symbol in get_priority_symbols():
+        # symbol = 'COST'
+        cdf = sc_df[sc_df["symbol"] == symbol]
 
-for symbol in sorted_symbols:
-    # symbol = 'COST'
-    cdf = sc_df[sc_df["symbol"] == symbol]
-
-    roots = list(
-        set([symbol] + cdf["symbol"].unique().tolist() + cdf["symbol_changes"].unique().tolist())
-    )
-
-    edf = earnings[earnings["symbol"].isin(roots)]
-
-    if edf["symbol"].nunique() > 1:
-        log.info(f"Multiple symbols found for {roots}")
-
-    for idx, row in edf.iterrows():
-        fiscal_quart = get_quarter(row["fiscalQuarterEnding"])
-        if (pd.Timestamp.now() - row["reportDate"]).days < 14:
-            log.info(
-                f"Skipping {symbol} {fiscal_quart}: Date is less than 2 weeks: {row['reportDate']}"
+        roots = list(
+            set(
+                [symbol] + cdf["symbol"].unique().tolist() + cdf["symbol_changes"].unique().tolist()
             )
-        else:
-            for weeks in week_list:
-                kwargs = {
-                    "symbol": symbol,
-                    "rdate": row["reportDate"],
-                    "weeks": weeks,
-                    "right": "C",
-                    "roots": roots,
-                    "filepath": f"{get_folder_name(weeks)}/{symbol}/{symbol}_{fiscal_quart}.parquet",
-                    "fQuarter": fiscal_quart,
-                    "noOfEsts": row["noOfEsts"],
-                    "epsForecast": row["epsForecast"],
-                    "fiscalQuarterEnding": row["fiscalQuarterEnding"],
-                    "rQuarter": get_quarter(row["reportDate"]),
-                }
-                if kwargs["filepath"] not in existing_files[weeks]:
-                    inputs.append(kwargs)
+        )
+
+        edf = earnings[earnings["symbol"].isin(roots)]
+
+        if edf["symbol"].nunique() > 1:
+            log.info(f"Multiple symbols found for {roots}")
+
+        for idx, row in edf.iterrows():
+            fiscal_quart = get_quarter(row["fiscalQuarterEnding"])
+            if (pd.Timestamp.now() - row["reportDate"]).days < 14:
+                log.info(
+                    f"Skipping {symbol} {fiscal_quart}: Date is less than 2 weeks: {row['reportDate']}"
+                )
+            else:
+                for weeks in week_list:
+                    kwargs = {
+                        "symbol": symbol,
+                        "rdate": row["reportDate"],
+                        "weeks": weeks,
+                        "right": right,
+                        "roots": roots,
+                        "filepath": f"{get_folder_name(weeks, right)}/{symbol}/{symbol}_{fiscal_quart}.parquet",
+                        "fQuarter": fiscal_quart,
+                        "noOfEsts": row["noOfEsts"],
+                        "epsForecast": row["epsForecast"],
+                        "fiscalQuarterEnding": row["fiscalQuarterEnding"],
+                        "rQuarter": get_quarter(row["reportDate"]),
+                    }
+                    if kwargs["filepath"] not in existing_files[weeks]:
+                        inputs.append(kwargs)
+
+    return inputs
 
 
 def thread_historical_queries(
@@ -224,18 +194,17 @@ def historical_snapshot(kwargs):
         weeks_between_fb=so.weeks,
     )
     if so.bexp is None:
-        return
+        sys.exit(0)
 
-    if (so.fexpdt - so.rdatedt).days >= 5:
-        log.error("Front expiration date is far close to report date")
-        return
+    if (so.fexpdt - so.rdatedt).days >= 7:
+        sys.exit(0)
 
     # Trading dates
     so.f_dates = get_exp_trading_days(roots=so.roots, exp=so.fexp)
     so.b_dates = get_exp_trading_days(roots=so.roots, exp=so.bexp)
     so.trade_dates = sorted(list(set(so.f_dates) & set(so.b_dates)))
-    if len(so.trade_dates) < 7:
-        return
+    if len(so.trade_dates) < 5:
+        sys.exit(0)
 
     # Strikes
     so.f_strikes = get_strikes_exp(roots=so.roots, exp=so.fexp)
@@ -259,7 +228,7 @@ def historical_snapshot(kwargs):
         base_params=base_params,
     )
     if und_df is None:
-        return
+        sys.exit(0)
 
     und_df = und_df[["underlying"]]
 
@@ -267,10 +236,10 @@ def historical_snapshot(kwargs):
         log.info(
             f"Underlying Price contains zero: {so.symbol}, {so.rdate}, {so.fexp}, Amount: {len(und_df[und_df['underlying'] == 0])}"
         )
-        und_df = und_df[und_df["underlying"] == 0]
+        und_df = und_df[und_df["underlying"] != 0]
         if len(und_df) == 0:
             log.error(f"No data to process for {so.symbol}, {so.rdate}, {so.fexp}")
-            return
+            sys.exit(0)
 
     # Find bounds for strikes
     min_und = und_df["underlying"].min()
@@ -309,7 +278,7 @@ def historical_snapshot(kwargs):
         ]
     ):
         log.info(f"Snapshot data is missing for {so.symbol}, dropping the symbol")
-        return
+        sys.exit(0)
 
     so.greeks = merge_historical_snapshot(so.greeks_front, so.greeks_back)
     so.quotes = merge_historical_snapshot(so.quotes_front, so.quotes_back)
@@ -355,7 +324,7 @@ def historical_snapshot(kwargs):
         rQuarter=kwargs["rQuarter"],
     )
     if df.empty:
-        return
+        sys.exit(0)
 
     if len(df["date"].unique()) > 5:
         table = pa.Table.from_pandas(df)
@@ -363,11 +332,54 @@ def historical_snapshot(kwargs):
 
 
 if __name__ == "__main__":
+    # --------------------------------------------------------------
+    # Input Parameters
+    # --------------------------------------------------------------
+    week_list = [1, 2, 3, 4, 5]
+    first_dates = pd.Timestamp("2016-01-01")  # Standard subscription
+    ivl = 900000  # 15 minutes
+    right = "C"
+
+    bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
+    existing_files = {w: bucket.list_files(f"{get_folder_name(w, right)}/") for w in week_list}
+
+    # --------------------------------------------------------------
+    # Setup historical earnings dates for qualified symbols
+    # --------------------------------------------------------------
+
+    symbols_df = read_from_db(query='SELECT symbol FROM "qualifiedSymbols"')
+    symbols = symbols_df["symbol"].unique().tolist()
+    earnings = read_from_db(
+        query=f'SELECT * FROM "nasdaqHistoricalEarnings" WHERE "symbol" IN {tuple(symbols)}'
+    )
+    earnings["reportDate"] = pd.to_datetime(earnings["reportDate"])
+    earnings = earnings[earnings["reportDate"] >= first_dates]
+
+    # TODO: Increase the historical earnings dates to 2016
+
+    # --------------------------------------------------------------
+    # Prepare symbols that have changed
+    # --------------------------------------------------------------
+    sc_df = read_from_db(
+        query=f"""SELECT * FROM "changesPolygon" WHERE "symbol" IN {tuple(symbols)}"""
+    )
+    sc_df["entries"] = sc_df.groupby("symbol")["symbol"].transform("count")
+    sc_df = sc_df[sc_df["entries"] >= 2]
+
+    sc_df["last_entry"] = sc_df.groupby("symbol")["date"].transform("max")
+    sc_df["last_entry"] = pd.to_datetime(sc_df["last_entry"], format="%Y-%m-%d")
+    sc_df = sc_df[sc_df["last_entry"] >= first_dates]
+
+    # --------------------------------------------------------------
+    # Start the process
+    # --------------------------------------------------------------
+
+    inputs = prepare_inputs()
+
+    log.info(f"Total Inputs: {len(inputs)}")
+
     _ = Parallel(n_jobs=4, backend="threading", verbose=10)(
         delayed(historical_snapshot)(kwargs) for kwargs in inputs
     )
 
     log.success("All Done")
-    # for i in inputs:
-    #     kwargs = i
-    #     historical_snapshot(i)
