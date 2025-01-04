@@ -363,7 +363,7 @@ def historical_snapshot(kwargs):
 
 
 if __name__ == "__main__":
-    _ = Parallel(n_jobs=4, backend="threading", verbose=100)(
+    _ = Parallel(n_jobs=4, backend="threading", verbose=10)(
         delayed(historical_snapshot)(kwargs) for kwargs in inputs
     )
 
