@@ -92,6 +92,23 @@ sc_df = sc_df[sc_df["last_entry"] >= first_dates]
 
 # sc_df[sc_df["symbol"] == "META"]
 
+# --------------------------------------------------------------
+# Get priority symbols
+# --------------------------------------------------------------
+grade_query = '''SELECT symbol, under_avg_trade_class, weeks FROM public."StockGrades"'''
+grades = read_from_db(query=grade_query)
+grades = grades.groupby("symbol")["under_avg_trade_class"].mean().sort_values(ascending=False).reset_index()
+
+sorted_symbols = []
+for idx, row in grades.iterrows():
+    if row["symbol"] in symbols:
+        sorted_symbols.append(row["symbol"])
+        
+for symbol in symbols:
+    if symbol not in sorted_symbols:
+        sorted_symbols.append(symbol)
+    
+    
 
 # --------------------------------------------------------------
 # Prepare inputs for the multi-processors
@@ -99,7 +116,7 @@ sc_df = sc_df[sc_df["last_entry"] >= first_dates]
 inputs = []
 
 
-for symbol in symbols:
+for symbol in sorted_symbols:
     # symbol = 'COST'
     cdf = sc_df[sc_df["symbol"] == symbol]
 
@@ -136,10 +153,6 @@ for symbol in symbols:
                 if kwargs["filepath"] not in existing_files[weeks]:
                     inputs.append(kwargs)
 
-for i in inputs:
-    if (i["symbol"] == "META") and (i["weeks"] == 1):
-        kwargs = i
-        break
 
 
 def thread_historical_queries(
@@ -168,7 +181,10 @@ def thread_historical_queries(
     dfs = Parallel(n_jobs=min(len(inputs), 8), backend="threading", verbose=0)(
         delayed(func)(**kwargs) for kwargs in inputs
     )
-    df = pd.concat(dfs)
+    dfs = [df for df in dfs if df is not None]
+    if len(dfs) == 0:
+        return
+    df = pd.concat(dfs, ignore_index=True)
     if attr_name == "greeks_back":
         df.drop(columns="underlying", inplace=True)
 
@@ -206,11 +222,11 @@ def historical_snapshot(kwargs):
     )
     if so.bexp is None:
         log.warning(f"No back expiration date found for {so.symbol}")
-        return pd.DataFrame()
+        return
 
-    if (so.fexpdt - so.rdatedt).days >= 7:
+    if (so.fexpdt - so.rdatedt).days >= 5:
         log.error("Front expiration date is far close to report date")
-        return pd.DataFrame()
+        return
 
     # Trading dates
     so.f_dates = get_exp_trading_days(roots=so.roots, exp=so.fexp)
@@ -218,7 +234,7 @@ def historical_snapshot(kwargs):
     so.trade_dates = sorted(list(set(so.f_dates) & set(so.b_dates)))
     if len(so.trade_dates) < 7:
         log.warning(f"Trading dates are less than 7 for {so.symbol}, {so.rdate}, {so.fexp}")
-        return pd.DataFrame
+        return
 
     # Strikes
     so.f_strikes = get_strikes_exp(roots=so.roots, exp=so.fexp)
@@ -243,7 +259,7 @@ def historical_snapshot(kwargs):
     )
     if und_df is None:
         log.warning(f"Underlying Price is missing for {so.symbol}, {so.rdate}, {so.fexp}")
-        return pd.DataFrame()
+        return
 
     und_df = und_df[["underlying"]]
 
@@ -254,16 +270,16 @@ def historical_snapshot(kwargs):
         und_df = und_df[und_df["underlying"] == 0]
         if len(und_df) == 0:
             log.error(f"No data to process for {so.symbol}, {so.rdate}, {so.fexp}")
-            return pd.DataFrame()
+            return
 
     # Find bounds for strikes
     min_und = und_df["underlying"].min()
     max_und = und_df["underlying"].max()
-    start_strikes = [s for s in so.strikes if (s / 1000) > (min_und * 0.93)]
-    sliced_strikes = [s for s in start_strikes if (s / 1000) < (max_und * 1.07)]
+    start_strikes = [s for s in so.strikes if (s / 1000) > (min_und * 0.94)]
+    sliced_strikes = [s for s in start_strikes if (s / 1000) < (max_und * 1.06)]
     if len(sliced_strikes) == 0:
         log.info(f"No strikes found for {so.symbol}, {so.rdate}, {so.fexp}")
-        return pd.DataFrame
+        return
 
     # Greeks
     for fb in ["front", "back"]:
@@ -292,7 +308,7 @@ def historical_snapshot(kwargs):
         ]
     ):
         log.warning(f"Snapshot data is missing for {so.symbol}, dropping the symbol")
-        return pd.DataFrame()
+        return
 
     so.greeks = merge_historical_snapshot(so.greeks_front, so.greeks_back)
     so.quotes = merge_historical_snapshot(so.quotes_front, so.quotes_back)
@@ -338,8 +354,9 @@ def historical_snapshot(kwargs):
         rQuarter=kwargs["rQuarter"],
     )
     if not df.empty:
-        table = pa.Table.from_pandas(df)
-        bucket.upload_table(table, f"{kwargs['filepath']}")
+        if len(df["date"].unique()) > 5:
+            table = pa.Table.from_pandas(df)
+            bucket.upload_table(table, f"{kwargs['filepath']}")
 
 
 if __name__ == "__main__":
