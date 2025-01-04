@@ -185,7 +185,7 @@ def historical_snapshot(kwargs):
         weeks=kwargs["weeks"],
         right=kwargs["right"],
     )
-    bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
+
     expirations = get_expiry_dates(so.roots)
     cal_dates = [d for d in expirations if d >= so.rdate]
     so.fexp = min(cal_dates)
@@ -330,6 +330,7 @@ def historical_snapshot(kwargs):
 
     if len(df["date"].unique()) > 5:
         table = pa.Table.from_pandas(df)
+        bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
         bucket.upload_table(table, f"{kwargs['filepath']}")
 
 
@@ -380,7 +381,7 @@ if __name__ == "__main__":
 
     log.info(f"Total Inputs: {len(inputs)}")
 
-    _ = Parallel(n_jobs=os.cpu_count(), backend="multiprocessing", verbose=10)(
+    _ = Parallel(n_jobs=4, backend="multiprocessing", verbose=10)(
         delayed(historical_snapshot)(kwargs) for kwargs in inputs
     )
 
