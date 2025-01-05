@@ -68,10 +68,42 @@ def get_priority_symbols():
         .reset_index()
     )
 
-    sorted_symbols = []
+    sorted_symbols = [
+        "AAPL",
+        "AMZN",
+        "AZO",
+        "BABA",
+        "BIB",
+        "BIDU",
+        "CF",
+        "CMG",
+        "CRM",
+        "DE",
+        "FB",
+        "FDX",
+        "FFIV",
+        "GMCR",
+        "GME",
+        "GOOG",
+        "IBM",
+        "JOY",
+        "LNKD",
+        "LULU",
+        "MA",
+        "NAG",
+        "NFLX",
+        "PCLN",
+        "SCTY",
+        "SINA",
+        "TIF",
+        "TSLA",
+        "ULTA",
+        "WFM",
+    ]
     for idx, row in grades.iterrows():
         if row["symbol"] in symbols:
-            sorted_symbols.append(row["symbol"])
+            if row["symbol"] not in sorted_symbols:
+                sorted_symbols.append(row["symbol"])
 
     for symbol in symbols:
         if symbol not in sorted_symbols:
@@ -87,15 +119,12 @@ def prepare_inputs():
     inputs = []
 
     for symbol in get_priority_symbols():
-        # symbol = 'COST'
         cdf = sc_df[sc_df["symbol"] == symbol]
-
         roots = list(
             set(
                 [symbol] + cdf["symbol"].unique().tolist() + cdf["symbol_changes"].unique().tolist()
             )
         )
-
         edf = earnings[earnings["symbol"].isin(roots)]
 
         if edf["symbol"].nunique() > 1:

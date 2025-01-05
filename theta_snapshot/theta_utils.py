@@ -113,7 +113,7 @@ def get_greeks(symbol: str, exp: int, right: str):
     df = response_to_df(response, columns)
     if right in ["C", "P"]:
         df = df[df["right"] == right]
-    df.drop(columns=["ms_of_day2", "bid", "ask", "ms_of_day"], inplace=True)
+    df.drop(columns=["bid", "ask", "ms_of_day"], inplace=True)
 
     return df
 

@@ -88,7 +88,7 @@ def main():
     # Merge with Earnings Calendar and Grades
     # --------------------------------------------------------------
     theta_df = theta_df.merge(
-        earn_df[["symbol", "noOfEsts", "bdte", "dte"]], on="symbol", how="inner"
+        earn_df[["symbol", "noOfEsts", "epsForecast", "bdte", "dte"]], on="symbol", how="inner"
     )
     theta_df = theta_df.merge(grades, on=["symbol", "weeks"], how="inner")
 
