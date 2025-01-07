@@ -375,7 +375,7 @@ if __name__ == "__main__":
 
     log.info(f"Total Inputs: {len(inputs)}")
 
-    for batch in batched(inputs, 10):
+    for batch in batched(inputs, 100):
         cpus = 4
         if is_market_open():
             cpus = 2
