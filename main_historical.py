@@ -68,38 +68,8 @@ def get_priority_symbols():
         .reset_index()
     )
 
-    sorted_symbols = [
-        "AAPL",
-        "AMZN",
-        "AZO",
-        "BABA",
-        "BIB",
-        "BIDU",
-        "CF",
-        "CMG",
-        "CRM",
-        "DE",
-        "FB",
-        "FDX",
-        "FFIV",
-        "GMCR",
-        "GME",
-        "GOOG",
-        "IBM",
-        "JOY",
-        "LNKD",
-        "LULU",
-        "MA",
-        "NAG",
-        "NFLX",
-        "PCLN",
-        "SCTY",
-        "SINA",
-        "TIF",
-        "TSLA",
-        "ULTA",
-        "WFM",
-    ]
+    # sorted_symbols = ["AAPL","AMZN","AZO","BABA","BIB","BIDU","CF","CMG","CRM","DE","FB","FDX","FFIV","GMCR","GME","GOOG","IBM","JOY","LNKD","LULU","MA","NAG","NFLX","PCLN","SCTY","SINA","TIF","TSLA","ULTA","WFM"]
+    sorted_symbols = []
     for idx, row in grades.iterrows():
         if row["symbol"] in symbols:
             if row["symbol"] not in sorted_symbols:
