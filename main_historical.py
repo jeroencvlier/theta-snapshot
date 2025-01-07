@@ -377,7 +377,7 @@ if __name__ == "__main__":
 
     for batch in batched(inputs, 200):
         cpus = 4
-        if is_market_open():
+        if is_market_open(break_Script=False):
             cpus = 2
             log.info("Market is open, reducing the number of CPUs to 2")
 
