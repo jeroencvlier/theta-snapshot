@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy import create_engine
 import os
 import sys
+from itertools import islice
 
 # import logging
 import httpx
@@ -16,6 +17,33 @@ import boto3
 import pyarrow.parquet as pq
 import botocore
 import io
+
+
+# --------------------------------------------------------------
+# Tools
+# --------------------------------------------------------------
+def batched(iterable, n, log_progress=True):
+    """
+    Splits an iterable into batches of size `n` and optionally logs progress.
+
+    Args:
+        iterable (iterable): The iterable to batch.
+        n (int): The size of each batch.
+        log_progress (bool): If True, logs the progress of batches.
+
+    Yields:
+        tuple: A batch of size `n`.
+    """
+    # Create an iterator and calculate total batches
+    iterator = iter(iterable)
+    total_batches = (len(iterable) + n - 1) // n  # Total number of batches (ceiling division)
+    batch_index = 0  # Initialize batch counter
+
+    while batch := tuple(islice(iterator, n)):
+        batch_index += 1
+        if log_progress:
+            log.info(f"{batch_index}/{total_batches} batches")
+        yield batch
 
 
 # --------------------------------------------------------------
@@ -95,32 +123,39 @@ class CalendarSnapData:
 
 
 def read_from_db(table: str = None, query: str = None) -> pd.DataFrame:
+    # NOTE: Got from theta-snapshot
     assert table or query, "Table or query must be provided"
     assert not (table and query), "Only one of table or query must be provided"
+    connstring = os.getenv("POSTGRESSSQL_URL")
+    if connstring is None:
+        log.error("Env Variable Error, POSTGRESSSQL_URL cannot be None")
+        raise ValueError("Env Variable Error, POSTGRESSSQL_URL cannot be None")
+
+    conn = create_engine(connstring)
     if query:
         try:
-            return pd.read_sql(query, create_engine(os.getenv("POSTGRESSSQL_URL")))
+            return pd.read_sql(query, conn)
         except Exception as err:
             log.error(f"FAILED to read DataFrame from database. ERROR: {err}")
             return pd.DataFrame()
 
     elif table:
         try:
-            return pd.read_sql_table(table, create_engine(os.getenv("POSTGRESSSQL_URL")))
+            return pd.read_sql_table(table, conn)
         except Exception as err:
             log.error(f"FAILED to read DataFrame from database. ERROR: {err}")
             return pd.DataFrame()
 
 
-def write_to_db(
-    df: pd.DataFrame, table_name: str, conn_db: str = None, if_exists="replace"
-) -> None:
-    if conn_db is None:
-        conn_db = "POSTGRESSSQL_URL"
+def write_to_db(df: pd.DataFrame, table_name: str, if_exists="replace") -> None:
+    connstring = os.getenv("POSTGRESSSQL_URL")
+    if connstring is None:
+        log.error("Env Variable Error, POSTGRESSSQL_URL cannot be None")
+        raise ValueError("Env Variable Error, POSTGRESSSQL_URL cannot be None")
     try:
         df.to_sql(
             table_name,
-            create_engine(os.getenv(conn_db)),
+            create_engine(connstring),
             if_exists=if_exists,
             index=False,
         )

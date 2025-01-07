@@ -3,7 +3,6 @@ from loguru import logger as log
 import pandas as pd
 from joblib import Parallel, delayed
 import pyarrow as pa
-import sys
 
 from theta_snapshot import (
     CalendarSnapData,
@@ -16,6 +15,8 @@ from theta_snapshot import (
     get_greeks_historical,
     get_quotes_historical,
     get_oi_historical,
+    batched,
+    is_market_open,
 )
 
 
@@ -25,22 +26,6 @@ def get_quarter(date):
     year = date.year
     fiscal_quart = (month - 1) // 3 + 1
     return f"{year}Q{fiscal_quart}"
-
-
-# def add_quarter(quarter_str):
-#     # Split the year and quarter
-#     year = int(quarter_str[:4])
-#     quarter = int(quarter_str[-1])
-
-#     # Add one quarter
-#     if quarter < 4:
-#         quarter += 1
-#     else:
-#         quarter = 1
-#         year += 1
-
-#     # Return the new quarter string
-#     return f"{year}Q{quarter}"
 
 
 # --------------------------------------------------------------
@@ -194,17 +179,17 @@ def historical_snapshot(kwargs):
         weeks_between_fb=so.weeks,
     )
     if so.bexp is None:
-        return
+        return kwargs["filepath"]
 
     if (so.fexpdt - so.rdatedt).days >= 7:
-        return
+        return kwargs["filepath"]
 
     # Trading dates
     so.f_dates = get_exp_trading_days(roots=so.roots, exp=so.fexp)
     so.b_dates = get_exp_trading_days(roots=so.roots, exp=so.bexp)
     so.trade_dates = sorted(list(set(so.f_dates) & set(so.b_dates)))
     if len(so.trade_dates) < 5:
-        return
+        return kwargs["filepath"]
 
     # Strikes
     so.f_strikes = get_strikes_exp(roots=so.roots, exp=so.fexp)
@@ -228,7 +213,7 @@ def historical_snapshot(kwargs):
         base_params=base_params,
     )
     if und_df is None:
-        return
+        return kwargs["filepath"]
 
     und_df = und_df[["underlying"]]
 
@@ -239,7 +224,7 @@ def historical_snapshot(kwargs):
         und_df = und_df[und_df["underlying"] != 0]
         if len(und_df) == 0:
             log.error(f"No data to process for {so.symbol}, {so.rdate}, {so.fexp}")
-            return
+            return kwargs["filepath"]
 
     # Find bounds for strikes
     min_und = und_df["underlying"].min()
@@ -250,7 +235,7 @@ def historical_snapshot(kwargs):
     sliced_strikes = [s for s in start_strikes if (s / 1000) < (max_und * 1.06)]
     if len(sliced_strikes) == 0:
         log.info(f"No strikes found for {so.symbol}, {so.rdate}, {so.fexp}")
-        return
+        return kwargs["filepath"]
 
     # Greeks
     for fb in ["front", "back"]:
@@ -279,7 +264,7 @@ def historical_snapshot(kwargs):
         ]
     ):
         log.info(f"Snapshot data is missing for {so.symbol}, dropping the symbol")
-        return
+        return kwargs["filepath"]
 
     so.greeks = merge_historical_snapshot(so.greeks_front, so.greeks_back)
     so.quotes = merge_historical_snapshot(so.quotes_front, so.quotes_back)
@@ -325,12 +310,14 @@ def historical_snapshot(kwargs):
         rQuarter=kwargs["rQuarter"],
     )
     if df.empty:
-        return
+        return kwargs["filepath"]
 
     if len(df["date"].unique()) > 5:
         table = pa.Table.from_pandas(df)
         bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
         bucket.upload_table(table, f"{kwargs['filepath']}")
+
+        return None
 
 
 if __name__ == "__main__":
@@ -344,6 +331,13 @@ if __name__ == "__main__":
 
     bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
     existing_files = {w: bucket.list_files(f"{get_folder_name(w, right)}/") for w in week_list}
+
+    failed_files_path = "data/raw/calendar/failed_files.parquet"
+    if bucket.file_exists(failed_files_path):
+        failed_df = bucket.read_dataframe(failed_files_path, format="parquet")
+        failed_files = failed_df["filepath"].tolist()
+    else:
+        failed_files = []
 
     # --------------------------------------------------------------
     # Setup historical earnings dates for qualified symbols
@@ -377,11 +371,27 @@ if __name__ == "__main__":
     # --------------------------------------------------------------
 
     inputs = prepare_inputs()
+    inputs = [kwargs for kwargs in inputs if kwargs["filepath"] not in failed_files]
 
     log.info(f"Total Inputs: {len(inputs)}")
 
-    _ = Parallel(n_jobs=4, backend="multiprocessing", verbose=10)(
-        delayed(historical_snapshot)(kwargs) for kwargs in inputs
-    )
+    for batch in batched(inputs, 10):
+        cpus = 4
+        if is_market_open():
+            cpus = 2
+            log.info("Market is open, reducing the number of CPUs to 2")
+
+        failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=5)(
+            delayed(historical_snapshot)(kwargs) for kwargs in batch
+        )
+        failed_files.extend([f for f in failed_returns if f is not None])
+        # write the failed files to the S3 bucket
+        failed_files_df = pd.DataFrame(failed_files, columns=["filepath"])
+        table = pa.Table.from_pandas(failed_files_df)
+        bucket.upload_table(table, failed_files_path)
 
     log.success("All Done")
+    # empty df and upload to S3
+    failed_files_df = pd.DataFrame(columns=["filepath"])
+    table = pa.Table.from_pandas(failed_files_df)
+    bucket.upload_table(table, failed_files_path)

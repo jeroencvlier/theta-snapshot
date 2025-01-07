@@ -6,6 +6,7 @@ from .utils import (
     is_market_open,
     time_checker_ny,
     main_wrapper,
+    batched,
 )
 from .theta_utils import (
     request_pagination,
@@ -60,4 +61,5 @@ __all__ = [
     "get_greeks_historical",
     "get_quotes_historical",
     "get_oi_historical",
+    "batched",
 ]
