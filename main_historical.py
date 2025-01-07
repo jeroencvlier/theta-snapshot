@@ -383,7 +383,7 @@ if __name__ == "__main__":
         cpus = 4
         if is_market_open(break_Script=False):
             cpus = 1
-            log.info("Market is open, reducing the number of CPUs to 2")
+            log.info(f"Market is open, reducing the number of CPUs to {cpus}")
 
         failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=5)(
             delayed(historical_snapshot)(kwargs) for kwargs in batch
