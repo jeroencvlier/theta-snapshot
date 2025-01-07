@@ -371,11 +371,15 @@ if __name__ == "__main__":
     # --------------------------------------------------------------
 
     inputs = prepare_inputs()
+
+    tf = len(inputs)
     inputs = [kwargs for kwargs in inputs if kwargs["filepath"] not in failed_files]
 
+    log.info(f"Total Failed Files: {len(failed_files)}")
     log.info(f"Total Inputs: {len(inputs)}")
+    log.info(f"Removed {tf - len(inputs)} failed files")
 
-    for batch in batched(inputs, 200):
+    for batch in batched(inputs, 300):
         cpus = 4
         if is_market_open(break_Script=False):
             cpus = 2
