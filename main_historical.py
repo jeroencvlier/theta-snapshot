@@ -382,7 +382,7 @@ if __name__ == "__main__":
     for batch in batched(inputs, 300):
         cpus = 4
         if is_market_open(break_Script=False):
-            cpus = 2
+            cpus = 1
             log.info("Market is open, reducing the number of CPUs to 2")
 
         failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=5)(
