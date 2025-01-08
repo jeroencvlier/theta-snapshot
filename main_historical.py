@@ -1,4 +1,5 @@
 import os
+import sys
 from loguru import logger as log
 import pandas as pd
 from joblib import Parallel, delayed
@@ -321,6 +322,8 @@ def historical_snapshot(kwargs):
 
 
 if __name__ == "__main__":
+    log.remove()
+    log.add(sys.stderr, level="INFO")  # Set to INFO level
     # --------------------------------------------------------------
     # Input Parameters
     # --------------------------------------------------------------
@@ -379,13 +382,13 @@ if __name__ == "__main__":
     log.info(f"Total Inputs: {len(inputs)}")
     log.info(f"Removed {tf - len(inputs)} failed files")
 
-    for batch in batched(inputs, 100):
+    for batch in batched(inputs, 80):
         cpus = 4
         if is_market_open(break_Script=False):
             cpus = 1
             log.info(f"Market is open, reducing the number of CPUs to {cpus}")
 
-        failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=5)(
+        failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=0)(
             delayed(historical_snapshot)(kwargs) for kwargs in batch
         )
         failed_files.extend([f for f in failed_returns if f is not None])

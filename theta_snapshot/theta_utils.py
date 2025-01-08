@@ -385,7 +385,7 @@ def get_back_expiration_date(
         # Check if the potential back expiration date exists in the data
         if bexp in exp_list:
             if offset != 0:
-                log.info(f"Public Holiday, back exp offset by: {offset} days.")
+                log.debug(f"Public Holiday, back exp offset by: {offset} days.")
             return int(bexp.strftime("%Y%m%d"))
 
     return None
