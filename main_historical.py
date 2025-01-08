@@ -388,7 +388,7 @@ if __name__ == "__main__":
             cpus = 1
             log.info(f"Market is open, reducing the number of CPUs to {cpus}")
 
-        failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=0)(
+        failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=10)(
             delayed(historical_snapshot)(kwargs) for kwargs in batch
         )
         failed_files.extend([f for f in failed_returns if f is not None])
