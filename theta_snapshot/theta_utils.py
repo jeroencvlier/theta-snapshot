@@ -349,7 +349,8 @@ def oi_filter(df: pd.DataFrame, min_oi: int = 20):
 
 
 def snapshot_filter(df: pd.DataFrame, min_oi: int = 20, max_rows: int = 2):
-    df = oi_filter(df, min_oi)
+    if min_oi > 0:
+        df = oi_filter(df, min_oi)
     df = underlying_price_filter(df, max_rows)
     return df
 

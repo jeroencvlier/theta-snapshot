@@ -45,6 +45,7 @@ def get_folder_name(weeks, right) -> str:
 
 
 def get_priority_symbols():
+    # we can keep this as the old table for now
     grade_query = '''SELECT symbol, under_avg_trade_class, weeks FROM public."StockGrades"'''
     grades = read_from_db(query=grade_query)
     grades = (
@@ -346,7 +347,7 @@ if __name__ == "__main__":
     # Setup historical earnings dates for qualified symbols
     # --------------------------------------------------------------
 
-    symbols_df = read_from_db(query='SELECT symbol FROM "qualifiedSymbols"')
+    symbols_df = read_from_db(query='SELECT symbol FROM public."qualifiedSymbols"')
     symbols = symbols_df["symbol"].unique().tolist()
     earnings = read_from_db(
         query=f'SELECT * FROM "nasdaqHistoricalEarnings" WHERE "symbol" IN {tuple(symbols)}'

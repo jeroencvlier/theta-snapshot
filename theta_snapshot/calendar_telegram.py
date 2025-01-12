@@ -22,6 +22,45 @@ from theta_snapshot import (
 #     return re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)
 
 
+# def escape_markdown_v2(text):
+#     """
+#     Escapes special characters for Telegram's MarkdownV2.
+#     Preserves any existing markdown links in the format [text](url)
+#     """
+#     # First, temporarily replace any existing markdown links
+#     link_pattern = r"\[(.*?)\]\((.*?)\)"
+#     links = re.findall(link_pattern, text)
+#     placeholder_text = text
+
+#     # Store links with their complete original form
+#     original_links = []
+#     for match in re.finditer(link_pattern, text):
+#         original_links.append(match.group(0))
+
+#     for i, original_link in enumerate(original_links):
+#         placeholder = f"LINK_PLACEHOLDER_{i}"
+#         placeholder_text = placeholder_text.replace(original_link, placeholder)
+
+#     # Escape all special MarkdownV2 characters except in placeholders
+#     escape_chars = r"_*[]()~`>#+-=|{}.!"
+#     parts = []
+#     for part in re.split(r"(LINK_PLACEHOLDER_\d+)", placeholder_text):
+#         if not part.startswith("LINK_PLACEHOLDER_"):
+#             part = re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", part)
+#         parts.append(part)
+#     escaped_text = "".join(parts)
+
+#     # Restore the links
+#     for i, (link_text, url) in enumerate(links):
+#         placeholder = f"LINK_PLACEHOLDER_{i}"
+#         # Only escape the text portion of the link, leave markdown syntax intact
+#         escaped_link_text = re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", link_text)
+#         escaped_url = url.replace(")", "\\)")  # Only escape closing parenthesis in URL
+#         escaped_text = escaped_text.replace(placeholder, f"[{escaped_link_text}]({escaped_url})")
+
+#     return escaped_text
+
+
 def escape_markdown_v2(text):
     """
     Escapes special characters for Telegram's MarkdownV2.
@@ -29,34 +68,29 @@ def escape_markdown_v2(text):
     """
     # First, temporarily replace any existing markdown links
     link_pattern = r"\[(.*?)\]\((.*?)\)"
-    links = re.findall(link_pattern, text)
-    placeholder_text = text
+    links = []
 
-    # Store links with their complete original form
-    original_links = []
-    for match in re.finditer(link_pattern, text):
-        original_links.append(match.group(0))
+    def replace_link(match):
+        links.append(match.groups())
+        return "LINK_PLACEHOLDER_{}".format(len(links) - 1)
 
-    for i, original_link in enumerate(original_links):
-        placeholder = f"LINK_PLACEHOLDER_{i}"
-        placeholder_text = placeholder_text.replace(original_link, placeholder)
+    placeholder_text = re.sub(link_pattern, replace_link, text)
 
-    # Escape all special MarkdownV2 characters except in placeholders
+    # Escape special characters
     escape_chars = r"_*[]()~`>#+-=|{}.!"
     parts = []
     for part in re.split(r"(LINK_PLACEHOLDER_\d+)", placeholder_text):
         if not part.startswith("LINK_PLACEHOLDER_"):
-            part = re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", part)
+            part = re.sub("([{}])".format(re.escape(escape_chars)), r"\\\1", part)
         parts.append(part)
     escaped_text = "".join(parts)
 
-    # Restore the links
-    for i, (link_text, url) in enumerate(links):
-        placeholder = f"LINK_PLACEHOLDER_{i}"
-        # Only escape the text portion of the link, leave markdown syntax intact
-        escaped_link_text = re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", link_text)
-        escaped_url = url.replace(")", "\\)")  # Only escape closing parenthesis in URL
-        escaped_text = escaped_text.replace(placeholder, f"[{escaped_link_text}]({escaped_url})")
+    # Restore links with proper escaping
+    for i, (text, url) in enumerate(links):
+        placeholder = "LINK_PLACEHOLDER_{}".format(i)
+        # Escape special characters in link text, but handle URL differently
+        escaped_link_text = re.sub("([{}])".format(re.escape(escape_chars)), r"\\\1", text)
+        escaped_text = escaped_text.replace(placeholder, "[{}]({})".format(escaped_link_text, url))
 
     return escaped_text
 
@@ -94,12 +128,14 @@ def send_telegram_alerts():
     cols_oi = ["open_interest_front", "open_interest_back"]
     cols_cal = ["calCost", "avgCalCost", "calGapPct", "pct_under_over_mean"]
     cols_und = ["underlying", "strike", "undPricePctDiff"]
-    cols_hist = ["under_avg_trade_class", "histearningscount", "Grade"]
+    cols_hist = ["undmean_avg_trade_class", "histEarningsCount", "Grade"]
     cols_extra = ["lastUpdated"]
     cols_all = (
         cols_iv + cols_spread + cols_earn + cols_oi + cols_cal + cols_und + cols_hist + cols_extra
     )
-    cols_alert = cols_earn + cols_und + cols_cal + cols_iv + cols_spread + cols_hist + cols_oi
+    cols_alert = (
+        cols_earn + cols_und + cols_cal + cols_iv + cols_spread + cols_hist + cols_oi + cols_extra
+    )
 
     cols_duplicated = [item for item, count in Counter(cols_all).items() if count > 1]
     if len(cols_duplicated) > 0:
@@ -108,20 +144,20 @@ def send_telegram_alerts():
     trade_query = f"""
         SELECT "{'", "'.join(cols_all)}"
         FROM "ThetaSnapshot" 
-        WHERE under_avg_trade_class >= {min_class}
+        WHERE "undmean_avg_trade_class" >= {min_class}
     """
 
     # trade_query = f"""
     #     SELECT *
     #     FROM "ThetaSnapshot"
-    #     WHERE under_avg_trade_class >= {min_class}
+    #     WHERE "undmean_avg_trade_class" >= {min_class}
     # """
 
     alert_df = read_from_db(query=trade_query)
 
     current_date = dt.now().strftime("%Y-%m-%d")
     historical_query = (
-        f"""SELECT * FROM "thetaTelegramAlerts" WHERE "alert_date" = '{current_date}'"""
+        f"""SELECT * FROM public."thetaTelegramAlerts" WHERE "alert_date" = '{current_date}'"""
     )
     hist_alerts = read_from_db(query=historical_query)
 
@@ -137,7 +173,7 @@ def send_telegram_alerts():
 
     if os.getenv("ENV").upper() not in ["DEV", "TEST"]:
         alert_df = alert_df[
-            (alert_df["histearningscount"] >= min_histearningscount)
+            (alert_df["histEarningsCount"] >= min_histearningscount)
             & (alert_df["bdte"] <= max_dbte)
             & (alert_df["bdte"] >= min_dbte)
             & (alert_df["pct_under_over_mean"] < pct_under_over_mean)
@@ -249,7 +285,7 @@ def send_telegram_alerts():
         for chat_id in chat_ids:
             messages = []
             message = ""
-            seperator = "------------------------------------------"
+            seperator = "----------------------------------------\n"
 
             muted_alerts_ids = muted_alerts[muted_alerts["chat_id"] == chat_id]
             current_date = pd.to_datetime("today").normalize()
@@ -282,26 +318,79 @@ def send_telegram_alerts():
                     report_date = "{}".format(
                         pd.to_datetime(row["reportDate"], format="%Y%m%d").strftime("%b%d'%y")
                     )
-                    link_nasdaq = f"https://www.nasdaq.com/market-activity/stocks/{row['symbol'].lower()}/earnings"
-                    link_zacks = f"https://www.zacks.com/stock/quote/{row['symbol']}/detailed-earning-estimates"
+                    # link_nasdaq = f"https://www.nasdaq.com/market-activity/stocks/{row['symbol'].lower()}/earnings"
+                    # link_zacks = f"https://www.zacks.com/stock/quote/{row['symbol']}/detailed-earning-estimates"
+                    # # [Go to MSFT Research](/researchpage?ticker=MSFT)
+                    # link_salt = f"{os.getenv('SALT_URL')}/researchpage"  # /researchpage?ticker={row['symbol']}&weeks={row['weeks']}&timestamp={row['lastUpdated']}&strike={row['strike']}"
+                    # alert = (
+                    #     f"{it}) {row['symbol']} - ({row['weeks']}W) {exp_dates}\n"
+                    #     f"      Reported Date: {report_date} {comment_symbols[comment]}\n"
+                    #     f"      View Earnings on [Nasdaq]({link_nasdaq}) / [Zacks]({link_zacks})\n"
+                    #     f"      Comment: {row['comment']}\n"
+                    #     f"      IV Consensus: {iv_comment} {right}{iv_consensus[iv_comment]}\n"
+                    #     f"      BDTE: {row['bdte']}\n"
+                    #     f"      Strike: {row['strike']}\n"
+                    #     f"      Underlying: {row['underlying']}\n"
+                    #     f"      CalCost: {row['calCost']}\n"
+                    #     f"      AvgCalCost: {row['avgCalCost']}\n"
+                    #     f"      Grade: {row['Grade']}\n"
+                    #     f"      CalGapPct: {row['calGapPct']}\n"
+                    #     f"      Spread % (F/B/Cal): {row['spreadPct_front']} / {row['spreadPct_back']} / {row['spreadPct_cal']}\n"
+                    #     f"      OI (F/B): {row['open_interest_front']} / {row['open_interest_back']}\n"
+                    #     f"      IV (F/B/Diff): {row['implied_vol_front']} / {row['implied_vol_back']} / {row['iv_pct_diff']}\n"
+                    #     f"      Salt Link: [Take me to SALT]({link_salt})\n"
+                    #     f"{seperator}\n"
+                    # )
+
+                    # Then construct the alert with explicit markdown link formatting
+                    link_nasdaq = (
+                        "https://www.nasdaq.com/market-activity/stocks/{}/earnings".format(
+                            row["symbol"].lower()
+                        )
+                    )
+                    link_zacks = (
+                        "https://www.zacks.com/stock/quote/{}/detailed-earning-estimates".format(
+                            row["symbol"]
+                        )
+                    )
+                    link_salt = "{}/researchpage?ticker={}&weeks={}&timestamp={}&strike={}".format(
+                        os.getenv("SALT_URL"),
+                        row["symbol"],
+                        row["weeks"],
+                        row["lastUpdated"],
+                        row["strike"],
+                    )
 
                     alert = (
-                        f"{it}) {row['symbol']} - ({row['weeks']}W) {exp_dates}\n"
-                        f"      Reported Date: {report_date} {comment_symbols[comment]}\n"
-                        f"      View Earnings on [Nasdaq]({link_nasdaq}) / [Zacks]({link_zacks})\n"
-                        f"      Comment: {row['comment']}\n"
-                        f"      IV Consensus: {iv_comment} {right}{iv_consensus[iv_comment]}\n"
-                        f"      BDTE: {row['bdte']}\n"
-                        f"      Strike: {row['strike']}\n"
-                        f"      Underlying: {row['underlying']}\n"
-                        f"      CalCost: {row['calCost']}\n"
-                        f"      AvgCalCost: {row['avgCalCost']}\n"
-                        f"      Grade: {row['Grade']}\n"
-                        f"      CalGapPct: {row['calGapPct']}\n"
-                        f"      Spread % (F/B/Cal): {row['spreadPct_front']} / {row['spreadPct_back']} / {row['spreadPct_cal']}\n"
-                        f"      OI (F/B): {row['open_interest_front']} / {row['open_interest_back']}\n"
-                        f"      IV (F/B/Diff): {row['implied_vol_front']} / {row['implied_vol_back']} / {row['iv_pct_diff']}\n"
-                        f"{seperator}\n"
+                        "{}) {} - ({}W) {}".format(it, row["symbol"], row["weeks"], exp_dates)
+                        + '\n      Date: {} {} (<a href="{}">Nasdaq</a> / <a href="{}">Zacks</a>)'.format(
+                            report_date, comment_symbols[comment], link_nasdaq, link_zacks
+                        )
+                        # + '\n      View Earnings on <a href="{}">Nasdaq</a> / <a href="{}">Zacks</a>'.format(
+                        #     link_nasdaq, link_zacks
+                        # )
+                        + "\n      Comment: {}".format(row["comment"])
+                        + "\n      IV Consensus: {} {}".format(
+                            iv_comment, right + iv_consensus[iv_comment]
+                        )
+                        + "\n      BDTE: {}".format(row["bdte"])
+                        + "\n      Strike: {}".format(row["strike"])
+                        + "\n      Underlying: {}".format(row["underlying"])
+                        + "\n      CalCost: {}".format(row["calCost"])
+                        + "\n      AvgCalCost: {}".format(row["avgCalCost"])
+                        + "\n      Grade: {}".format(row["Grade"])
+                        + "\n      CalGapPct: {}".format(row["calGapPct"])
+                        + "\n      Spread % (F/B/Cal): {} / {} / {}".format(
+                            row["spreadPct_front"], row["spreadPct_back"], row["spreadPct_cal"]
+                        )
+                        + "\n      OI (F/B): {} / {}".format(
+                            row["open_interest_front"], row["open_interest_back"]
+                        )
+                        + "\n      IV (F/B/Diff): {} / {} / {}".format(
+                            row["implied_vol_front"], row["implied_vol_back"], row["iv_pct_diff"]
+                        )
+                        + '\n      Salt Link: <a href="{}">Take me to SALT</a>'.format(link_salt)
+                        + "\n{}".format(seperator)
                     )
 
                     message += alert
@@ -314,11 +403,19 @@ def send_telegram_alerts():
             if len(messages) > 0:
                 messages[0] = f"🚨 {len(new_alerts)} Trade Alerts 🚨\n{seperator}\n" + messages[0]
                 for message in messages:
-                    message = escape_markdown_v2(message)
+                    # message = escape_markdown_v2(message)
+                    # bot.send_message(
+                    #     chat_id, message, parse_mode="MarkdownV2", disable_web_page_preview=True
+                    # )
                     bot.send_message(
-                        chat_id, message, parse_mode="MarkdownV2", disable_web_page_preview=True
+                        chat_id,
+                        message,
+                        parse_mode="HTML",  # Changed from MarkdownV2 to HTML
+                        disable_web_page_preview=True,
                     )
-                    log.info("Alert sent to chat_id: %s", chat_id)
+                    log.info("Alert sent to chat_id: {}".format(chat_id))
 
         if os.getenv("ENV") not in ["dev", "test"]:
             write_to_db(hist_alerts, "thetaTelegramAlerts", if_exists="append")
+
+

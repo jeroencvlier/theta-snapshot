@@ -28,8 +28,7 @@ def main():
     # Setup
     # --------------------------------------------------------------
     right = "C"
-    min_deposit = 0.5
-    max_deposit = 5
+
     cpus = max(os.cpu_count(), 20)
     log.info(f"Available CPUs: {os.cpu_count()}, defaulting to {cpus} for parallelism.")
 
@@ -43,11 +42,11 @@ def main():
 
     # --------------------------------------------------------------
     log.info("Reading Earnings Calendar from DB")
-    grade_query = """
-        SELECT * FROM public."StockGrades" 
-        WHERE under_avg_trade_class >= 1.0 AND weeks <= 5
-    """
-    grades = read_from_db(query=grade_query)
+    maxgrade_query = """SELECT "symbol" FROM public."historicalBacktestGrades" GROUP BY "symbol" HAVING max(undmean_avg_trade_class) >= 1.25"""
+    grade_symbols = read_from_db(query=maxgrade_query)["symbol"].unique()
+    grade_query = f"""SELECT * FROM public."historicalBacktestGrades" WHERE symbol in {tuple(grade_symbols)} AND "weeks" <= '5' AND "latest" = TRUE"""
+    grades = read_from_db(query=grade_query).drop(columns=["latest"])
+    grades["weeks"] = grades["weeks"].astype(int)
 
     # --------------------------------------------------------------
 
@@ -59,13 +58,6 @@ def main():
     n_symbols = snap_df["symbol"].unique().shape[0]
     log.info(f"Scrapping Snapshot: {n_symbols} symbols, {snap_df.shape[0]} strategies")
 
-    # inputs = [
-    #     (snapshot, row["symbol"], row["reportDate"], row["weeks"], right)
-    #     for _, row in snap_df.iterrows()
-    # ]
-
-    # generate inputs as kwargs for snapshot function
-
     inputs = [
         {
             "symbol": row["symbol"],
@@ -76,12 +68,11 @@ def main():
         for _, row in snap_df.iterrows()
     ]
 
-    snap_result = Parallel(n_jobs=cpus, backend="loky", verbose=2)(
+    snap_result = Parallel(n_jobs=cpus, backend="loky", verbose=10)(
         delayed(snapshot)(**kwargs) for kwargs in inputs
     )
 
     theta_df = pd.concat(snap_result)
-    theta_df = theta_df[(theta_df["calCost"] < max_deposit) & (theta_df["calCost"] > min_deposit)]
     log.success(f"Snapshot Completed: {theta_df.shape[0]} strategies")
 
     # --------------------------------------------------------------
@@ -100,14 +91,14 @@ def main():
         log.warning("No data to process")
         return
 
-    # TODO: Check if histcalcostmean is the same as calCostPctMean
     calcost_query = """
-        SELECT symbol, bdte, "histcalcostmean" AS "calCostPctMean", "weeks", "histearningscount" 
-        FROM public."calCostPctHistoricalMeans" 
+        SELECT symbol, bdte, "calCostPctMean", "weeks", "histEarningsCount" 
+        FROM public."calCostPctBacktestMeans" 
         WHERE latest = True AND symbol in {}
     """.format(tuple(theta_df["symbol"].unique()))
 
     calcost_df = read_from_db(query=calcost_query)
+    calcost_df["weeks"] = calcost_df["weeks"].astype(int)
     calcost_df["calCostPctMean"] = calcost_df["calCostPctMean"].round(4)
 
     # NOTE: This might be able to be removed, the cal cost on day zero
@@ -127,6 +118,7 @@ def main():
     # --------------------------------------------------------------
     log.info("Scrapping Implied Volatility")
     remaining_symbols = set(theta_df["symbol"].unique())
+    log.info("Scrapping Implied Volatility for {} symbols".format(len(remaining_symbols)))
 
     ivs = Parallel(n_jobs=cpus, backend="loky", verbose=2)(
         delayed(get_iv_chain)(symb) for symb in remaining_symbols
@@ -144,17 +136,18 @@ def main():
     # --------------------------------------------------------------
     # Write to DB
     # --------------------------------------------------------------
-    theta_df["lastUpdated"] = int(dt.now().timestamp())
+    timestamp_update = int(dt.now().timestamp())
+    theta_df = theta_df.assign(lastUpdated=timestamp_update)
+    iv_df = iv_df.assign(lastUpdated=timestamp_update)
     write_to_db(theta_df, "ThetaSnapshot")
     write_to_db(iv_df, "ThetaIVSnapshot")
-
     log.info("Completed Snapshots and IVs")
 
     # --------------------------------------------------------------
     # Telegram
     # --------------------------------------------------------------
-    time_checker_ny(target_minute=44, break_Script=os.getenv("BREAK_SCRIPT") == "True")
-    send_telegram_alerts()
+    if time_checker_ny(target_minute=44, break_Script=False):
+        send_telegram_alerts()
 
 
 if __name__ == "__main__":

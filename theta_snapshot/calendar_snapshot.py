@@ -1,6 +1,7 @@
 import pandas as pd
 from loguru import logger as log
 from joblib import Parallel, delayed
+import numpy as np
 
 import option_emporium as oe
 from theta_snapshot import (
@@ -18,9 +19,9 @@ pd.set_option("display.max_columns", None)
 
 
 def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C", roots: list = None):
-    # symbol = "HUM"
-    # date_string = "2025-01-23 00:00:00"
-    # weeks = 2
+    # symbol = "APO"
+    # date_string = '2025-02-04 00:00:00'
+    # weeks = 1
     # rdate = pd.Timestamp(date_string)
     # right = "C"
 
@@ -28,7 +29,7 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C", roo
     if roots is None:
         roots = [symbol]
 
-    so = CalendarSnapData(symbol=symbol, roots=roots, rdatedt=rdate, weeks=weeks, right=right)
+    so = CalendarSnapData(symbol=symbol, roots=roots, rdatedt=rdate, weeks=int(weeks), right=right)
 
     # --------------------------------------------------------------
     # Expiration Dates
@@ -44,11 +45,15 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C", roo
     )
 
     if so.bexp is None:
-        log.info(f"No back expiration date found for {so.symbol}")
+        # log.info(f"No back expiration date found for {so.symbol}")
         return pd.DataFrame()
 
     if (so.fexpdt - so.rdatedt).days >= 7:
-        log.error("Front expiration date is far close to report date")
+        log.error(
+            "Front exp is more than 7 days away for {}, {} days".format(
+                so.symbol, (so.fexpdt - so.rdatedt).days
+            )
+        )
         return pd.DataFrame()
 
     # --------------------------------------------------------------
@@ -74,32 +79,48 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C", roo
             so.greeks_back is None,
             so.quotes_front is None,
             so.quotes_back is None,
-            so.oi_front is None,
-            so.oi_back is None,
+            # so.oi_front is None,
+            # so.oi_back is None,
         ]
     ):
-        log.warning(f"Snapshot data is missing for {so.symbol}, dropping the symbol")
+        log.warning(f"Snapshot data is missing for {so.symbol}.")
         return pd.DataFrame()
 
     so.greeks = merge_snapshot(so.greeks_front, so.greeks_back)
     so.quotes = merge_snapshot(so.quotes_front, so.quotes_back)
-    so.oi = merge_snapshot(so.oi_front, so.oi_back)
 
     m_cols = ["symbol", "right", "date", "strike_milli", "exp_front", "exp_back"]
-    moi_cols = ["symbol", "right", "strike_milli", "exp_front", "exp_back"]
 
     complete_df = so.quotes.merge(
         so.greeks, on=m_cols, how="inner", suffixes=("_quote", "_ivgreek")
-    ).merge(so.oi, on=moi_cols, how="inner", suffixes=("", "_oi"))
+    )
+    # --------------------------------------------------------------
+    # Deal with oi (it's ok if missing)
+    # --------------------------------------------------------------
+    if (so.oi_front is not None) and (so.oi_back is None):
+        so.oi_back = so.oi_front
+        so.oi_back["open_interest"] = np.nan
+
+    elif (so.oi_back is not None) and (so.oi_front is None):
+        so.oi_front = so.oi_back
+        so.oi_front["open_interest"] = np.nan
+    elif (so.oi_back is None) and (so.oi_front is None):
+        cols = ["symbol", "right", "strike_milli", "exp", "open_interest"]
+        so.oi_front = pd.DataFrame({}, columns=cols)
+        so.oi_back = pd.DataFrame({}, columns=cols)
+
+    so.oi = merge_snapshot(so.oi_front, so.oi_back)
+    moi_cols = ["symbol", "right", "strike_milli", "exp_front", "exp_back"]
+    complete_df = complete_df.merge(so.oi, on=moi_cols, how="left", suffixes=("", "_oi"))
 
     # --------------------------------------------------------------
     # Assertions for the final DataFrame
     # --------------------------------------------------------------
     all_symbols = complete_df["symbol"].unique()
     assert len(all_symbols) == 1, f"Multiple symbols found,  expected {so.symbol}, {all_symbols}"
-    assert (
-        so.symbol == all_symbols[0]
-    ), f"Symbol mismatch, expected {so.symbol}, found {all_symbols[0]}"
+    assert so.symbol == all_symbols[0], (
+        f"Symbol mismatch, expected {so.symbol}, found {all_symbols[0]}"
+    )
     assert len(complete_df["right"].unique()) == 1, "Multiple rights found"
     assert so.right == complete_df["right"].unique()[0], "Right mismatch"
     assert len(complete_df["date"].unique()) == 1, "Multiple dates found"
@@ -116,6 +137,6 @@ def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C", roo
     # --------------------------------------------------------------
     # Filters
     # --------------------------------------------------------------
-    complete_df = snapshot_filter(df=complete_df, min_oi=20, max_rows=2)
+    complete_df = snapshot_filter(df=complete_df, min_oi=0, max_rows=2)
 
     return complete_df
