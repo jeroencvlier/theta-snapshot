@@ -12,6 +12,7 @@ from theta_snapshot import (
     read_from_db,
     write_to_db,
     append_to_table,
+    delete_old_data,
     get_iv_chain,
     is_market_open,
     time_checker_ny,
@@ -121,7 +122,7 @@ def main():
     remaining_symbols = set(theta_df["symbol"].unique())
     log.info("Scrapping Implied Volatility for {} symbols".format(len(remaining_symbols)))
 
-    ivs = Parallel(n_jobs=cpus, backend="loky", verbose=2)(
+    ivs = Parallel(n_jobs=cpus, backend="loky", verbose=10)(
         delayed(get_iv_chain)(symb) for symb in remaining_symbols
     )
     iv_df = pd.concat(ivs)
@@ -149,6 +150,9 @@ def main():
     # --------------------------------------------------------------
     if time_checker_ny(target_minute=44, break_Script=False):
         send_telegram_alerts()
+
+    # TODO: Drop data oldert than 5 days
+    delete_old_data("ThetaSnapshot", 5)
 
 
 if __name__ == "__main__":

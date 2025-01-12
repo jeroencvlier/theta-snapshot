@@ -254,6 +254,51 @@ def append_to_table(df: pd.DataFrame, table_name: str, indexes: List[str] = None
         log.error(f"Failed to update table {table_name}. ERROR: {err}")
 
 
+def delete_old_data(table_name: str = "ThetaSnapshot", days: int = 5) -> None:
+    """
+    Deletes data older than specified number of days using a direct DELETE query.
+    Logs the count of rows before and after deletion.
+
+    Args:
+        table_name (str): Name of the table to clean up
+        days (int): Number of days of data to keep (deletes anything older)
+    """
+    conn = create_connection()
+
+    # First count total rows
+    count_query = f"""
+    SELECT COUNT(*) FROM "{table_name}"
+    """
+
+    # Modified query to handle timestamp comparison correctly
+    delete_query = f"""
+    DELETE FROM "{table_name}"
+    WHERE "lastUpdated"::timestamp < (NOW() - INTERVAL '{days} days')
+    """
+
+    try:
+        with conn.begin() as transaction:
+            # Get initial count
+            result = transaction.execute(text(count_query))
+            initial_count = result.scalar()
+
+            # Perform deletion
+            result = transaction.execute(text(delete_query))
+            rows_deleted = result.rowcount
+
+            transaction.commit()
+
+        remaining_rows = initial_count - rows_deleted
+        log.info(f"Initial row count in {table_name}: {initial_count}")
+        log.info(f"Rows deleted: {rows_deleted}")
+        log.info(f"Remaining rows: {remaining_rows}")
+        log.success(
+            f"Successfully deleted {rows_deleted} rows older than {days} days from {table_name}"
+        )
+    except Exception as err:
+        log.error(f"Failed to delete old data from {table_name}. ERROR: {err}")
+
+
 def update_table(tables: List[pd.DataFrame], table_name: str, indexes: List[str] = None):
     """Update table and create indexes if specified."""
     if not tables:
