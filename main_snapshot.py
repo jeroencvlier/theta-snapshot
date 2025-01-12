@@ -153,6 +153,7 @@ def main():
 
     # TODO: Drop data oldert than 5 days
     delete_old_data("ThetaSnapshot", 5)
+    delete_old_data("ThetaIVSnapshot", 5)
 
 
 if __name__ == "__main__":
