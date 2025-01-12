@@ -257,7 +257,7 @@ def append_to_table(df: pd.DataFrame, table_name: str, indexes: List[str] = None
 def delete_old_data(table_name: str = "ThetaSnapshot", days: int = 5) -> None:
     """
     Deletes data older than specified number of days using a direct DELETE query.
-    Logs the count of rows before and after deletion.
+    Specifically designed for PostgreSQL 16, handling lastUpdated as bigint (Unix timestamp).
 
     Args:
         table_name (str): Name of the table to clean up
@@ -270,10 +270,10 @@ def delete_old_data(table_name: str = "ThetaSnapshot", days: int = 5) -> None:
     SELECT COUNT(*) FROM "{table_name}"
     """
 
-    # Modified query to handle timestamp comparison correctly
+    # PostgreSQL-specific query using to_timestamp for bigint conversion
     delete_query = f"""
     DELETE FROM "{table_name}"
-    WHERE "lastUpdated"::timestamp < (NOW() - INTERVAL '{days} days')
+    WHERE to_timestamp("lastUpdated") < NOW() - INTERVAL '{days} days'
     """
 
     try:
