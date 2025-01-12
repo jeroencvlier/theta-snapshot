@@ -3,6 +3,7 @@ from .utils import (
     S3Handler,
     read_from_db,
     write_to_db,
+    append_to_table,
     is_market_open,
     time_checker_ny,
     main_wrapper,

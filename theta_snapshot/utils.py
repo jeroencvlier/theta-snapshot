@@ -7,6 +7,9 @@ from sqlalchemy import create_engine
 import os
 import sys
 from itertools import islice
+from sqlalchemy import create_engine
+from sqlalchemy.sql import text
+from typing import List
 
 # import logging
 import httpx
@@ -122,16 +125,61 @@ class CalendarSnapData:
 # --------------------------------------------------------------
 
 
-def read_from_db(table: str = None, query: str = None) -> pd.DataFrame:
-    # NOTE: Got from theta-snapshot
-    assert table or query, "Table or query must be provided"
-    assert not (table and query), "Only one of table or query must be provided"
+# def read_from_db(table: str = None, query: str = None) -> pd.DataFrame:
+#     # NOTE: Got from theta-snapshot
+#     assert table or query, "Table or query must be provided"
+#     assert not (table and query), "Only one of table or query must be provided"
+#     connstring = os.getenv("POSTGRESSSQL_URL")
+#     if connstring is None:
+#         log.error("Env Variable Error, POSTGRESSSQL_URL cannot be None")
+#         raise ValueError("Env Variable Error, POSTGRESSSQL_URL cannot be None")
+
+#     conn = create_engine(connstring)
+#     if query:
+#         try:
+#             return pd.read_sql(query, conn)
+#         except Exception as err:
+#             log.error(f"FAILED to read DataFrame from database. ERROR: {err}")
+#             return pd.DataFrame()
+
+#     elif table:
+#         try:
+#             return pd.read_sql_table(table, conn)
+#         except Exception as err:
+#             log.error(f"FAILED to read DataFrame from database. ERROR: {err}")
+#             return pd.DataFrame()
+
+
+# def write_to_db(df: pd.DataFrame, table_name: str, if_exists="replace") -> None:
+#     connstring = os.getenv("POSTGRESSSQL_URL")
+#     if connstring is None:
+#         log.error("Env Variable Error, POSTGRESSSQL_URL cannot be None")
+#         raise ValueError("Env Variable Error, POSTGRESSSQL_URL cannot be None")
+#     try:
+#         df.to_sql(
+#             table_name,
+#             create_engine(connstring),
+#             if_exists=if_exists,
+#             index=False,
+#         )
+#         log.success(f"DataFrame written successfully. Table: {table_name}, Entries: {df.shape[0]}")
+#     except Exception as err:
+#         log.error(f"FAILED to write DataFrame to database. ERROR: {err}")
+
+
+def create_connection():
     connstring = os.getenv("POSTGRESSSQL_URL")
     if connstring is None:
         log.error("Env Variable Error, POSTGRESSSQL_URL cannot be None")
         raise ValueError("Env Variable Error, POSTGRESSSQL_URL cannot be None")
+    return create_engine(connstring)
 
-    conn = create_engine(connstring)
+
+def read_from_db(table: str = None, query: str = None) -> pd.DataFrame:
+    # NOTE: Got from theta-snapshot
+    assert table or query, "Table or query must be provided"
+    assert not (table and query), "Only one of table or query must be provided"
+    conn = create_connection()
     if query:
         try:
             return pd.read_sql(query, conn)
@@ -148,20 +196,117 @@ def read_from_db(table: str = None, query: str = None) -> pd.DataFrame:
 
 
 def write_to_db(df: pd.DataFrame, table_name: str, if_exists="replace") -> None:
-    connstring = os.getenv("POSTGRESSSQL_URL")
-    if connstring is None:
-        log.error("Env Variable Error, POSTGRESSSQL_URL cannot be None")
-        raise ValueError("Env Variable Error, POSTGRESSSQL_URL cannot be None")
+    conn = create_connection()
     try:
         df.to_sql(
             table_name,
-            create_engine(connstring),
+            conn,
             if_exists=if_exists,
             index=False,
         )
         log.success(f"DataFrame written successfully. Table: {table_name}, Entries: {df.shape[0]}")
     except Exception as err:
         log.error(f"FAILED to write DataFrame to database. ERROR: {err}")
+
+
+def create_index(table_name: str, column_name: str, index_name: str = None):
+    """Create an index on a specific column of a table."""
+    conn = create_connection()
+    index_name = index_name or f"{table_name}_{column_name}_idx"
+    query = f'CREATE INDEX IF NOT EXISTS {index_name} ON "{table_name}" ("{column_name}");'
+    try:
+        with conn.begin() as transaction:  # Use transaction context
+            transaction.execute(text(query))  # Use SQLAlchemy text() for safe query execution
+            transaction.commit()
+        log.info(f"Index {index_name} created successfully on {table_name}({column_name})")
+    except Exception as err:
+        log.error(f"Failed to create index {index_name}. ERROR: {err}")
+
+
+def create_composite_index(table_name: str, columns: list, index_name: str = None):
+    """Create a composite index on multiple columns of a table."""
+    conn = create_connection()
+    index_name = index_name or f"{table_name}_{'_'.join(columns)}_idx"
+    columns_str = ", ".join(f'"{col}"' for col in columns)
+    query = f'CREATE INDEX IF NOT EXISTS {index_name} ON "{table_name}" ({columns_str});'
+    try:
+        with conn.begin() as transaction:  # Use transaction context
+            transaction.execute(text(query))  # Use SQLAlchemy text()
+            transaction.commit()
+        log.info(
+            f"Composite index {index_name} created successfully on {table_name}({columns_str})"
+        )
+    except Exception as err:
+        log.error(f"Failed to create composite index {index_name}. ERROR: {err}")
+
+
+def append_to_table(df: pd.DataFrame, table_name: str, indexes: List[str] = None):
+    try:
+        write_to_db(df, table_name, if_exists="append")
+        if len(indexes) > 1:
+            for index in indexes:
+                create_index(table_name, index)
+            if len(indexes) > 1:
+                create_composite_index(table_name, indexes)
+
+            log.success(f"Table {table_name} updated successfully with indexes")
+    except Exception as err:
+        log.error(f"Failed to update table {table_name}. ERROR: {err}")
+
+
+def update_table(tables: List[pd.DataFrame], table_name: str, indexes: List[str] = None):
+    """Update table and create indexes if specified."""
+    if not tables:
+        log.info(f"No data to write to {table_name}")
+        return
+    try:
+        # Write first table
+        write_to_db(tables[0], table_name, if_exists="replace")
+
+        # Append additional tables if any
+        for table in tables[1:]:
+            write_to_db(table, table_name, if_exists="append")
+
+        # Create indexes if specified
+        if indexes:
+            for index in indexes:
+                create_index(table_name, index)
+            if len(indexes) > 1:
+                create_composite_index(table_name, indexes)
+
+        log.success(f"Table {table_name} updated successfully with indexes")
+    except Exception as err:
+        log.error(f"Failed to update table {table_name}. ERROR: {err}")
+
+
+def check_indexes(table_name: str):
+    """Check what indexes exist on a table"""
+    query = f"""
+    SELECT
+        indexname,
+        indexdef
+    FROM
+        pg_indexes
+    WHERE
+        tablename = '{table_name}'
+    ORDER BY
+        indexname;
+    """
+
+    try:
+        indexes_df = read_from_db(query=query)
+        if indexes_df.empty:
+            print(f"No indexes found for table {table_name}")
+        else:
+            print(f"\nIndexes for table {table_name}:")
+            for _, row in indexes_df.iterrows():
+                print(f"Index: {row['indexname']}")
+                print(f"Definition: {row['indexdef']}")
+                print("-" * 50)
+        return indexes_df
+    except Exception as e:
+        print(f"Error checking indexes: {e}")
+        return pd.DataFrame()
 
 
 # --------------------------------------------------------------
@@ -171,7 +316,7 @@ def write_to_db(df: pd.DataFrame, table_name: str, if_exists="replace") -> None:
 
 def is_market_open(break_Script=True) -> bool:
     try:
-        url = f'https://api.polygon.io/v1/marketstatus/now?apiKey={os.getenv("naughty_hermann")}'
+        url = f"https://api.polygon.io/v1/marketstatus/now?apiKey={os.getenv('naughty_hermann')}"
         response = httpx.get(url)
         if response.json()["market"].lower() == "open":
             log.info("Market is open")

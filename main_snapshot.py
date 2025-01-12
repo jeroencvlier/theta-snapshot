@@ -11,6 +11,7 @@ from theta_snapshot import (
     snapshot,
     read_from_db,
     write_to_db,
+    append_to_table,
     get_iv_chain,
     is_market_open,
     time_checker_ny,
@@ -139,8 +140,8 @@ def main():
     timestamp_update = int(dt.now().timestamp())
     theta_df = theta_df.assign(lastUpdated=timestamp_update)
     iv_df = iv_df.assign(lastUpdated=timestamp_update)
-    write_to_db(theta_df, "ThetaSnapshot")
-    write_to_db(iv_df, "ThetaIVSnapshot")
+    append_to_table(theta_df, "ThetaSnapshot", indexes=["symbol", "lastUpdated", "bdte", "weeks"])
+    append_to_table(iv_df, "ThetaIVSnapshot", indexes=["symbol", "lastUpdated"])
     log.info("Completed Snapshots and IVs")
 
     # --------------------------------------------------------------
