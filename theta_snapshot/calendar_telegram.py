@@ -353,7 +353,7 @@ def send_telegram_alerts():
                             row["symbol"]
                         )
                     )
-                    link_salt = "{}/alertpage#trade-details?ticker={}&weeks={}&timestamp={}&strike={}".format(
+                    link_salt = "{}/alertpage?ticker={}&weeks={}&timestamp={}&strike={}#trade-details".format(
                         os.getenv("SALT_URL"),
                         row["symbol"],
                         row["weeks"],
