@@ -148,8 +148,7 @@ def main():
     # --------------------------------------------------------------
     # Telegram
     # --------------------------------------------------------------
-    if time_checker_ny(target_minute=44, break_Script=False):
-        send_telegram_alerts()
+    send_telegram_alerts()
 
     # TODO: Drop data oldert than 5 days
     delete_old_data("ThetaSnapshot", 5)
