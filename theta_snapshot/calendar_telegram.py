@@ -353,7 +353,7 @@ def send_telegram_alerts():
                             row["symbol"]
                         )
                     )
-                    link_salt = "{}/researchpage?ticker={}&weeks={}&timestamp={}&strike={}".format(
+                    link_salt = "{}/alertpage#trade-details?ticker={}&weeks={}&timestamp={}&strike={}".format(
                         os.getenv("SALT_URL"),
                         row["symbol"],
                         row["weeks"],
@@ -417,5 +417,3 @@ def send_telegram_alerts():
 
         if os.getenv("ENV") not in ["dev", "test"]:
             write_to_db(hist_alerts, "thetaTelegramAlerts", if_exists="append")
-
-
