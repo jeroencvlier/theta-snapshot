@@ -104,6 +104,7 @@ min_histearningscount = 7
 min_class = 1.25
 cal_gap_pct = {"1": 0.1, "2": 0.175, "3": 0.25, "4": 0.325, "5": 0.40, "6": 0.475}
 min_oi = 5
+min_size = 10
 pct_under_over_mean = -0.05
 min_spread = 0.3
 min_cal_spread = 0.6
@@ -125,7 +126,14 @@ def send_telegram_alerts():
     ]
     cols_spread = ["spreadPct_front", "spreadPct_back", "spreadPct_cal"]
     cols_earn = ["symbol", "reportDate", "exp_front", "exp_back", "weeks", "bdte"]
-    cols_oi = ["open_interest_front", "open_interest_back"]
+    cols_oi = [
+        "open_interest_front",
+        "open_interest_back",
+        "ask_size_back",
+        "bid_size_back",
+        "ask_size_front",
+        "bid_size_front",
+    ]
     cols_cal = ["calCost", "avgCalCost", "calGapPct", "pct_under_over_mean"]
     cols_und = ["underlying", "strike", "undPricePctDiff"]
     cols_hist = ["undmean_avg_trade_class", "histEarningsCount", "Grade"]
@@ -154,7 +162,6 @@ def send_telegram_alerts():
     # trade_query = f"""
     #     SELECT *
     #     FROM "ThetaSnapshot"
-    #     WHERE "undmean_avg_trade_class" >= {min_class}
     # """
 
     alert_df = read_from_db(query=trade_query)
@@ -185,8 +192,12 @@ def send_telegram_alerts():
             & (alert_df["bdte"] <= max_dbte)
             & (alert_df["bdte"] >= min_dbte)
             & (alert_df["pct_under_over_mean"] < pct_under_over_mean)
-            & (alert_df["open_interest_front"] >= min_oi)
-            & (alert_df["open_interest_back"] >= min_oi)
+            # & (alert_df["open_interest_front"] >= min_oi)
+            # & (alert_df["open_interest_back"] >= min_oi)
+            & (alert_df["ask_size_back"] >= min_size)
+            & (alert_df["bid_size_back"] >= min_size)
+            & (alert_df["ask_size_front"] >= min_size)
+            & (alert_df["bid_size_front"] >= min_size)
             & (alert_df["spreadPct_front"] <= min_spread)
             & (alert_df["spreadPct_back"] <= min_spread)
             & (alert_df["spreadPct_cal"] <= min_cal_spread)
@@ -430,4 +441,4 @@ def send_telegram_alerts():
                     log.info("Alert sent to chat_id: {}".format(chat_id))
 
             if os.getenv("ENV") not in ["dev", "test"]:
-                write_to_db(new_alerts, "ThetaTelegramAlerts", if_exists="append")
+                write_to_db(new_alerts, "ThetaTelegramAlerts", if_exists="replace")
