@@ -13,88 +13,6 @@ from theta_snapshot import (
 )
 
 
-# def escape_markdown_v2(text):
-#     """
-#     Escapes special characters for Telegram's MarkdownV2.
-#     """
-#     # Escape all special MarkdownV2 characters, including '-'
-#     escape_chars = r"_*[]()~`>#+-=|{}.!"
-#     return re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)
-
-
-# def escape_markdown_v2(text):
-#     """
-#     Escapes special characters for Telegram's MarkdownV2.
-#     Preserves any existing markdown links in the format [text](url)
-#     """
-#     # First, temporarily replace any existing markdown links
-#     link_pattern = r"\[(.*?)\]\((.*?)\)"
-#     links = re.findall(link_pattern, text)
-#     placeholder_text = text
-
-#     # Store links with their complete original form
-#     original_links = []
-#     for match in re.finditer(link_pattern, text):
-#         original_links.append(match.group(0))
-
-#     for i, original_link in enumerate(original_links):
-#         placeholder = f"LINK_PLACEHOLDER_{i}"
-#         placeholder_text = placeholder_text.replace(original_link, placeholder)
-
-#     # Escape all special MarkdownV2 characters except in placeholders
-#     escape_chars = r"_*[]()~`>#+-=|{}.!"
-#     parts = []
-#     for part in re.split(r"(LINK_PLACEHOLDER_\d+)", placeholder_text):
-#         if not part.startswith("LINK_PLACEHOLDER_"):
-#             part = re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", part)
-#         parts.append(part)
-#     escaped_text = "".join(parts)
-
-#     # Restore the links
-#     for i, (link_text, url) in enumerate(links):
-#         placeholder = f"LINK_PLACEHOLDER_{i}"
-#         # Only escape the text portion of the link, leave markdown syntax intact
-#         escaped_link_text = re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", link_text)
-#         escaped_url = url.replace(")", "\\)")  # Only escape closing parenthesis in URL
-#         escaped_text = escaped_text.replace(placeholder, f"[{escaped_link_text}]({escaped_url})")
-
-#     return escaped_text
-
-
-# def escape_markdown_v2(text):
-#     """
-#     Escapes special characters for Telegram's MarkdownV2.
-#     Preserves any existing markdown links in the format [text](url)
-#     """
-#     # First, temporarily replace any existing markdown links
-#     link_pattern = r"\[(.*?)\]\((.*?)\)"
-#     links = []
-
-#     def replace_link(match):
-#         links.append(match.groups())
-#         return "LINK_PLACEHOLDER_{}".format(len(links) - 1)
-
-#     placeholder_text = re.sub(link_pattern, replace_link, text)
-
-#     # Escape special characters
-#     escape_chars = r"_*[]()~`>#+-=|{}.!"
-#     parts = []
-#     for part in re.split(r"(LINK_PLACEHOLDER_\d+)", placeholder_text):
-#         if not part.startswith("LINK_PLACEHOLDER_"):
-#             part = re.sub("([{}])".format(re.escape(escape_chars)), r"\\\1", part)
-#         parts.append(part)
-#     escaped_text = "".join(parts)
-
-#     # Restore links with proper escaping
-#     for i, (text, url) in enumerate(links):
-#         placeholder = "LINK_PLACEHOLDER_{}".format(i)
-#         # Escape special characters in link text, but handle URL differently
-#         escaped_link_text = re.sub("([{}])".format(re.escape(escape_chars)), r"\\\1", text)
-#         escaped_text = escaped_text.replace(placeholder, "[{}]({})".format(escaped_link_text, url))
-
-#     return escaped_text
-
-
 # --------------------------------------------------------------
 # Filter presets
 # --------------------------------------------------------------
@@ -158,11 +76,6 @@ def send_telegram_alerts():
             FROM "ThetaSnapshot"
         );
         """
-
-    # trade_query = f"""
-    #     SELECT *
-    #     FROM "ThetaSnapshot"
-    # """
 
     alert_df = read_from_db(query=trade_query)
 
@@ -343,30 +256,6 @@ def send_telegram_alerts():
                     report_date = "{}".format(
                         pd.to_datetime(row["reportDate"], format="%Y%m%d").strftime("%b%d'%y")
                     )
-                    # link_nasdaq = f"https://www.nasdaq.com/market-activity/stocks/{row['symbol'].lower()}/earnings"
-                    # link_zacks = f"https://www.zacks.com/stock/quote/{row['symbol']}/detailed-earning-estimates"
-                    # # [Go to MSFT Research](/researchpage?ticker=MSFT)
-                    # link_salt = f"{os.getenv('SALT_URL')}/researchpage"  # /researchpage?ticker={row['symbol']}&weeks={row['weeks']}&timestamp={row['lastUpdated']}&strike={row['strike']}"
-                    # alert = (
-                    #     f"{it}) {row['symbol']} - ({row['weeks']}W) {exp_dates}\n"
-                    #     f"      Reported Date: {report_date} {comment_symbols[comment]}\n"
-                    #     f"      View Earnings on [Nasdaq]({link_nasdaq}) / [Zacks]({link_zacks})\n"
-                    #     f"      Comment: {row['comment']}\n"
-                    #     f"      IV Consensus: {iv_comment} {right}{iv_consensus[iv_comment]}\n"
-                    #     f"      BDTE: {row['bdte']}\n"
-                    #     f"      Strike: {row['strike']}\n"
-                    #     f"      Underlying: {row['underlying']}\n"
-                    #     f"      CalCost: {row['calCost']}\n"
-                    #     f"      AvgCalCost: {row['avgCalCost']}\n"
-                    #     f"      Grade: {row['Grade']}\n"
-                    #     f"      CalGapPct: {row['calGapPct']}\n"
-                    #     f"      Spread % (F/B/Cal): {row['spreadPct_front']} / {row['spreadPct_back']} / {row['spreadPct_cal']}\n"
-                    #     f"      OI (F/B): {row['open_interest_front']} / {row['open_interest_back']}\n"
-                    #     f"      IV (F/B/Diff): {row['implied_vol_front']} / {row['implied_vol_back']} / {row['iv_pct_diff']}\n"
-                    #     f"      Salt Link: [Take me to SALT]({link_salt})\n"
-                    #     f"{seperator}\n"
-                    # )
-
                     # Then construct the alert with explicit markdown link formatting
                     link_nasdaq = (
                         "https://www.nasdaq.com/market-activity/stocks/{}/earnings".format(
@@ -428,10 +317,6 @@ def send_telegram_alerts():
             if len(messages) > 0:
                 messages[0] = f"🚨 {len(new_alerts)} Trade Alerts 🚨\n{seperator}\n" + messages[0]
                 for message in messages:
-                    # message = escape_markdown_v2(message)
-                    # bot.send_message(
-                    #     chat_id, message, parse_mode="MarkdownV2", disable_web_page_preview=True
-                    # )
                     bot.send_message(
                         chat_id,
                         message,
