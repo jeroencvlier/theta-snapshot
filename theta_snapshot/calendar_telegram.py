@@ -163,7 +163,11 @@ def send_telegram_alerts():
     historical_query = (
         f"""SELECT * FROM public."ThetaTelegramAlerts" WHERE "alert_date" = '{current_date}'"""
     )
-    hist_alerts = read_from_db(query=historical_query)
+    try:
+        hist_alerts = read_from_db(query=historical_query)
+    except Exception as e:
+        hist_alerts = pd.DataFrame()
+        log.error(f"Error reading historical alerts: {e}")
 
     log.info(f"Loaded Previous Alerts: {len(hist_alerts)}")
 
@@ -226,10 +230,13 @@ def send_telegram_alerts():
         symbol = alert[1]["symbol"]
         week = alert[1]["weeks"]
 
-        previous_alert_sublist = hist_alerts[
-            (hist_alerts["symbol"] == symbol) & (hist_alerts["weeks"] == week)
-        ]
-        # display(alert[1])
+        if len(hist_alerts) > 0:
+            previous_alert_sublist = hist_alerts[
+                (hist_alerts["symbol"] == symbol) & (hist_alerts["weeks"] == week)
+            ]
+        else:
+            previous_alert_sublist = pd.DataFrame()
+
         if len(previous_alert_sublist) == 0:
             new_alerts.append(alert[1])
         else:
