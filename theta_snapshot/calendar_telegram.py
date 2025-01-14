@@ -441,4 +441,4 @@ def send_telegram_alerts():
                     log.info("Alert sent to chat_id: {}".format(chat_id))
 
             if os.getenv("ENV") not in ["dev", "test"]:
-                write_to_db(new_alerts, "ThetaTelegramAlerts", if_exists="replace")
+                write_to_db(new_alerts, "ThetaTelegramAlerts", if_exists="append")
