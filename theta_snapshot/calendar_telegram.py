@@ -161,7 +161,7 @@ def send_telegram_alerts():
 
     current_date = dt.now().strftime("%Y-%m-%d")
     historical_query = (
-        f"""SELECT * FROM public."thetaTelegramAlerts" WHERE "alert_date" = '{current_date}'"""
+        f"""SELECT * FROM public."ThetaTelegramAlerts" WHERE "alert_date" = '{current_date}'"""
     )
     hist_alerts = read_from_db(query=historical_query)
 
@@ -420,4 +420,4 @@ def send_telegram_alerts():
                     log.info("Alert sent to chat_id: {}".format(chat_id))
 
         if os.getenv("ENV") not in ["dev", "test"]:
-            write_to_db(new_alerts, "thetaTelegramAlerts", if_exists="append")
+            write_to_db(new_alerts, "ThetaTelegramAlerts", if_exists="append")
