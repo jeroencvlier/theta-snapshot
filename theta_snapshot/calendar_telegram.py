@@ -143,9 +143,13 @@ def send_telegram_alerts():
 
     trade_query = f"""
         SELECT "{'", "'.join(cols_all)}"
-        FROM "ThetaSnapshot" 
-        WHERE "undmean_avg_trade_class" >= {min_class}
-    """
+        FROM "ThetaSnapshot"
+        WHERE "undmean_avg_trade_class" >= 1.25
+        AND "lastUpdated" = (
+            SELECT MAX("lastUpdated")
+            FROM "ThetaSnapshot"
+        );
+        """
 
     # trade_query = f"""
     #     SELECT *
@@ -416,4 +420,4 @@ def send_telegram_alerts():
                     log.info("Alert sent to chat_id: {}".format(chat_id))
 
         if os.getenv("ENV") not in ["dev", "test"]:
-            write_to_db(hist_alerts, "thetaTelegramAlerts", if_exists="append")
+            write_to_db(new_alerts, "thetaTelegramAlerts", if_exists="append")
