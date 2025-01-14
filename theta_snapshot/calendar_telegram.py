@@ -61,38 +61,38 @@ from theta_snapshot import (
 #     return escaped_text
 
 
-def escape_markdown_v2(text):
-    """
-    Escapes special characters for Telegram's MarkdownV2.
-    Preserves any existing markdown links in the format [text](url)
-    """
-    # First, temporarily replace any existing markdown links
-    link_pattern = r"\[(.*?)\]\((.*?)\)"
-    links = []
+# def escape_markdown_v2(text):
+#     """
+#     Escapes special characters for Telegram's MarkdownV2.
+#     Preserves any existing markdown links in the format [text](url)
+#     """
+#     # First, temporarily replace any existing markdown links
+#     link_pattern = r"\[(.*?)\]\((.*?)\)"
+#     links = []
 
-    def replace_link(match):
-        links.append(match.groups())
-        return "LINK_PLACEHOLDER_{}".format(len(links) - 1)
+#     def replace_link(match):
+#         links.append(match.groups())
+#         return "LINK_PLACEHOLDER_{}".format(len(links) - 1)
 
-    placeholder_text = re.sub(link_pattern, replace_link, text)
+#     placeholder_text = re.sub(link_pattern, replace_link, text)
 
-    # Escape special characters
-    escape_chars = r"_*[]()~`>#+-=|{}.!"
-    parts = []
-    for part in re.split(r"(LINK_PLACEHOLDER_\d+)", placeholder_text):
-        if not part.startswith("LINK_PLACEHOLDER_"):
-            part = re.sub("([{}])".format(re.escape(escape_chars)), r"\\\1", part)
-        parts.append(part)
-    escaped_text = "".join(parts)
+#     # Escape special characters
+#     escape_chars = r"_*[]()~`>#+-=|{}.!"
+#     parts = []
+#     for part in re.split(r"(LINK_PLACEHOLDER_\d+)", placeholder_text):
+#         if not part.startswith("LINK_PLACEHOLDER_"):
+#             part = re.sub("([{}])".format(re.escape(escape_chars)), r"\\\1", part)
+#         parts.append(part)
+#     escaped_text = "".join(parts)
 
-    # Restore links with proper escaping
-    for i, (text, url) in enumerate(links):
-        placeholder = "LINK_PLACEHOLDER_{}".format(i)
-        # Escape special characters in link text, but handle URL differently
-        escaped_link_text = re.sub("([{}])".format(re.escape(escape_chars)), r"\\\1", text)
-        escaped_text = escaped_text.replace(placeholder, "[{}]({})".format(escaped_link_text, url))
+#     # Restore links with proper escaping
+#     for i, (text, url) in enumerate(links):
+#         placeholder = "LINK_PLACEHOLDER_{}".format(i)
+#         # Escape special characters in link text, but handle URL differently
+#         escaped_link_text = re.sub("([{}])".format(re.escape(escape_chars)), r"\\\1", text)
+#         escaped_text = escaped_text.replace(placeholder, "[{}]({})".format(escaped_link_text, url))
 
-    return escaped_text
+#     return escaped_text
 
 
 # --------------------------------------------------------------
@@ -159,7 +159,7 @@ def send_telegram_alerts():
 
     alert_df = read_from_db(query=trade_query)
 
-    current_date = dt.now().strftime("%Y-%m-%d")
+    current_date = dt.now().strftime("%Y%m%d")
     historical_query = (
         f"""SELECT * FROM public."ThetaTelegramAlerts" WHERE "alert_date" = '{current_date}'"""
     )
@@ -208,15 +208,17 @@ def send_telegram_alerts():
         log.info("No new alerts found")
         return
 
-    alert_df["alert_time"] = alert_df["lastUpdated"]
-    alert_df["alert_date"] = alert_df["alert_time"].apply(
-        lambda x: int(dt.fromtimestamp(x).strftime("%Y%m%d"))
+    alert_df = alert_df.assign(
+        alert_time=alert_df["lastUpdated"],
+        alert_date=alert_df["lastUpdated"].apply(
+            lambda x: int(dt.fromtimestamp(x).strftime("%Y%m%d"))
+        ),
     )
 
-    alerts_df = alert_df[cols_alert]
+    # alerts_df = alert_df[cols_alert]
     # get unique alerts only for symbol and week
-    alerts_df = alerts_df.drop_duplicates(subset=["symbol", "weeks"], keep="first")
-    if len(alerts_df) == 0:
+    alert_df = alert_df.drop_duplicates(subset=["symbol", "weeks"], keep="first")
+    if len(alert_df) == 0:
         log.info("No new alerts found")
         return
 
@@ -224,9 +226,9 @@ def send_telegram_alerts():
     # Logic to check for previous alerts
     # --------------------------------------------------------------
     new_alerts = []
-    alerts_df.sort_values(by=["symbol", "weeks"], inplace=True)
+    alert_df.sort_values(by=["symbol", "weeks"], inplace=True)
 
-    for alert in alerts_df.iterrows():
+    for alert in alert_df.iterrows():
         symbol = alert[1]["symbol"]
         week = alert[1]["weeks"]
 
@@ -313,13 +315,14 @@ def send_telegram_alerts():
                     right = ""
                     if row["iv_consensus"]:
                         iv_comment = "High"
-                    elif any([row["iv_max_exp_c"], row["iv_max_exp_p"]]):
-                        right = "Calls " if row["iv_max_exp_c"] else "Puts "
+                    elif row["iv_max_exp_c"] == row["exp_front"]:
+                        right = "Calls "
                         iv_comment = "Medium"
-                    elif not any([row["iv_max_exp_c"], row["iv_max_exp_p"]]):
-                        iv_comment = "Low"
+                    elif row["iv_max_exp_p"] == row["exp_front"]:
+                        right = "Puts "
+                        iv_comment = "Medium"
                     else:
-                        iv_comment = "No Data"
+                        iv_comment = "Low"
 
                     exp_dates = "{} / {}".format(
                         pd.to_datetime(row["exp_front"], format="%Y%m%d").strftime("%b%d'%y"),
@@ -426,5 +429,5 @@ def send_telegram_alerts():
                     )
                     log.info("Alert sent to chat_id: {}".format(chat_id))
 
-        if os.getenv("ENV") not in ["dev", "test"]:
-            write_to_db(new_alerts, "ThetaTelegramAlerts", if_exists="append")
+            if os.getenv("ENV") not in ["dev", "test"]:
+                write_to_db(new_alerts, "ThetaTelegramAlerts", if_exists="append")
