@@ -111,6 +111,7 @@ def main():
     )
     # >> end of NOTE
 
+    # df = df[df['symbol']=="UBER"]
     theta_df = theta_df.merge(calcost_df, on=["symbol", "bdte", "weeks"], how="inner")
     theta_df = oe.calculate_diffs(theta_df)
     theta_df = oe.expected_calendar_price(theta_df)
