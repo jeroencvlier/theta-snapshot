@@ -254,7 +254,7 @@ def append_to_table(df: pd.DataFrame, table_name: str, indexes: List[str] = None
         log.error(f"Failed to update table {table_name}. ERROR: {err}")
 
 
-def delete_old_data(table_name: str = "ThetaSnapshot", days: int = 5) -> None:
+def delete_old_data(table_name: str = "ThetaSnapshot", days: int = 7) -> None:
     """
     Deletes data older than specified number of days using a direct DELETE query.
     Specifically designed for PostgreSQL 16, handling lastUpdated as bigint (Unix timestamp).
