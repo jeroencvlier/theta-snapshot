@@ -4,13 +4,15 @@ import sys
 from collections import Counter
 from datetime import datetime as dt
 import pandas as pd
-from loguru import logger as log
+import logging as log
 import telebot
 
 from theta_snapshot import (
     read_from_db,
     write_to_db,
 )
+
+log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 
 
 # --------------------------------------------------------------

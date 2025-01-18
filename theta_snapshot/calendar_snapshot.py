@@ -1,5 +1,5 @@
 import pandas as pd
-from loguru import logger as log
+import logging as log
 from joblib import Parallel, delayed
 import numpy as np
 
@@ -16,7 +16,7 @@ from theta_snapshot import (
 )
 
 pd.set_option("display.max_columns", None)
-
+log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 
 def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C", roots: list = None):
     # symbol = "APO"

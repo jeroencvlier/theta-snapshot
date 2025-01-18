@@ -1,6 +1,6 @@
 import os
 import httpx
-from loguru import logger as log
+import logging as log
 import pandas as pd
 import option_emporium as oe
 from typing import List

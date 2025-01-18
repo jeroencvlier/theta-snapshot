@@ -1,6 +1,6 @@
 import os
 import sys
-from loguru import logger as log
+import logging as log
 import pandas as pd
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
@@ -20,6 +20,9 @@ from theta_snapshot import (
     iv_features,
     send_telegram_alerts,
 )
+
+
+log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 
 
 @main_wrapper
@@ -75,7 +78,7 @@ def main():
     )
 
     theta_df = pd.concat(snap_result)
-    log.success(f"Snapshot Completed: {theta_df.shape[0]} strategies")
+    log.info(f"Snapshot Completed: {theta_df.shape[0]} strategies")
 
     # --------------------------------------------------------------
     # Merge with Earnings Calendar and Grades
@@ -103,15 +106,15 @@ def main():
     calcost_df["weeks"] = calcost_df["weeks"].astype(int)
     calcost_df["calCostPctMean"] = calcost_df["calCostPctMean"].round(4)
 
-    # NOTE: This might be able to be removed, the cal cost on day zero
+    # --------------------------------------------------------------
+    # Calculate Expected Calendar Price
+    # --------------------------------------------------------------
     cc_fd = calcost_df[calcost_df["bdte"] == 1].copy()
     cc_fd = cc_fd.rename(columns={"calCostPctMean": "calCostPctMeanDayZero"})
     theta_df = theta_df.merge(
         cc_fd[["symbol", "weeks", "calCostPctMeanDayZero"]], on=["symbol", "weeks"], how="inner"
     )
-    # >> end of NOTE
 
-    # df = df[df['symbol']=="UBER"]
     theta_df = theta_df.merge(calcost_df, on=["symbol", "bdte", "weeks"], how="inner")
     theta_df = oe.calculate_diffs(theta_df)
     theta_df = oe.expected_calendar_price(theta_df)

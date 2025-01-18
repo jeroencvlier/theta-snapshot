@@ -1,6 +1,6 @@
 import os
 import sys
-from loguru import logger as log
+import logging as log
 import pandas as pd
 from joblib import Parallel, delayed
 import pyarrow as pa
@@ -19,6 +19,8 @@ from theta_snapshot import (
     batched,
     is_market_open,
 )
+
+log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 
 
 def get_quarter(date):
@@ -323,8 +325,6 @@ def historical_snapshot(kwargs):
 
 
 if __name__ == "__main__":
-    log.remove()
-    log.add(sys.stderr, level="INFO")  # Set to INFO level
     # --------------------------------------------------------------
     # Input Parameters
     # --------------------------------------------------------------
@@ -398,7 +398,7 @@ if __name__ == "__main__":
         table = pa.Table.from_pandas(failed_files_df)
         bucket.upload_table(table, failed_files_path)
 
-    log.success("All Done")
+    log.info("All Done")
     # empty df and upload to S3
     failed_files_df = pd.DataFrame(columns=["filepath"])
     table = pa.Table.from_pandas(failed_files_df)

@@ -7,8 +7,9 @@ from theta_snapshot import (
     get_expiry_dates,
     get_greeks,
 )
+import logging as log
 
-from loguru import logger as log
+log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 
 
 def get_most_common_strikes(ivs_list, symbol):

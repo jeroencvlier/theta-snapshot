@@ -14,12 +14,16 @@ from typing import List
 # import logging
 import httpx
 
-from loguru import logger as log
-
+import logging as log
 import boto3
 import pyarrow.parquet as pq
 import botocore
 import io
+
+
+httpx_logger = log.getLogger("httpx")
+httpx_logger.setLevel(log.CRITICAL)
+log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 
 
 # --------------------------------------------------------------
@@ -162,7 +166,7 @@ class CalendarSnapData:
 #             if_exists=if_exists,
 #             index=False,
 #         )
-#         log.success(f"DataFrame written successfully. Table: {table_name}, Entries: {df.shape[0]}")
+#         log.info(f"DataFrame written successfully. Table: {table_name}, Entries: {df.shape[0]}")
 #     except Exception as err:
 #         log.error(f"FAILED to write DataFrame to database. ERROR: {err}")
 
@@ -204,7 +208,7 @@ def write_to_db(df: pd.DataFrame, table_name: str, if_exists="replace") -> None:
             if_exists=if_exists,
             index=False,
         )
-        log.success(f"DataFrame written successfully. Table: {table_name}, Entries: {df.shape[0]}")
+        log.info(f"DataFrame written successfully. Table: {table_name}, Entries: {df.shape[0]}")
     except Exception as err:
         log.error(f"FAILED to write DataFrame to database. ERROR: {err}")
 
@@ -249,7 +253,7 @@ def append_to_table(df: pd.DataFrame, table_name: str, indexes: List[str] = None
             if len(indexes) > 1:
                 create_composite_index(table_name, indexes)
 
-            log.success(f"Table {table_name} updated successfully with indexes")
+            log.info(f"Table {table_name} updated successfully with indexes")
     except Exception as err:
         log.error(f"Failed to update table {table_name}. ERROR: {err}")
 
@@ -292,7 +296,7 @@ def delete_old_data(table_name: str = "ThetaSnapshot", days: int = 7) -> None:
         log.info(f"Initial row count in {table_name}: {initial_count}")
         log.info(f"Rows deleted: {rows_deleted}")
         log.info(f"Remaining rows: {remaining_rows}")
-        log.success(
+        log.info(
             f"Successfully deleted {rows_deleted} rows older than {days} days from {table_name}"
         )
     except Exception as err:
@@ -319,7 +323,7 @@ def update_table(tables: List[pd.DataFrame], table_name: str, indexes: List[str]
             if len(indexes) > 1:
                 create_composite_index(table_name, indexes)
 
-        log.success(f"Table {table_name} updated successfully with indexes")
+        log.info(f"Table {table_name} updated successfully with indexes")
     except Exception as err:
         log.error(f"Failed to update table {table_name}. ERROR: {err}")
 
@@ -407,7 +411,7 @@ def main_wrapper(func):
             func(*args, **kwargs)
             end = round(dt.now().timestamp())
             time_taken = divmod((end - start), 60)
-            log.success(f"Time taken: {time_taken[0]} minutes, {time_taken[1]} seconds")
+            log.info(f"Time taken: {time_taken[0]} minutes, {time_taken[1]} seconds")
         except Exception as err:
             log.opt(exception=True).error(f"Error in {func.__name__}: {err}")
             # TODO: add telegram alert to notify of error
