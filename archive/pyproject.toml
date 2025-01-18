@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "theta-snapshot"
+version = "0.1.0"
+description = ""
+authors = ["Jeroen van Lier <jeroencvlier@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+python-dotenv = "^1.0.1"
+httpx = "^0.28.1"
+requests = "^2.32.3"
+option-emporium = "*"
+pandas = "^2.2.3"
+joblib = "^1.4.2"
+sqlalchemy = "^2.0.36"
+psycopg2-binary = "^2.9.10"
+tqdm = "^4.67.1"
+pytelegrambotapi = "^4.25.0"
+pyarrow = "^18.1.0"
+boto3 = "^1.35.90"
+pandas-market-calendars = "^4.4.2"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
+missingno = "^0.5.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

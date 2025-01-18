@@ -1,2 +1,2 @@
 snap:
-	poetry run python -m main_snapshot
+	uv run python -m main_snapshot
