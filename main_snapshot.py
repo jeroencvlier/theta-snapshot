@@ -18,7 +18,7 @@ from theta_snapshot import (
     time_checker_ny,
     main_wrapper,
     iv_features,
-    send_telegram_alerts,
+    main_telegram,
     calculate_buisness_days,
     generate_predictions,
 )
@@ -158,7 +158,7 @@ def main():
     # --------------------------------------------------------------
     # Telegram
     # --------------------------------------------------------------
-    send_telegram_alerts()
+    main_telegram()
 
     # TODO: Drop data oldert than 5 days
     delete_old_data("ThetaSnapshot", 7)

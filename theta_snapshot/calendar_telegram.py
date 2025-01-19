@@ -342,3 +342,10 @@ def send_telegram_alerts():
 
             if os.getenv("ENV") not in ["dev", "test"]:
                 write_to_db(new_alerts, "ThetaTelegramAlerts", if_exists="append")
+
+
+def main_telegram():
+    try:
+        send_telegram_alerts()
+    except Exception as e:
+        log.error(f"Error in main_telegram: {e}")
