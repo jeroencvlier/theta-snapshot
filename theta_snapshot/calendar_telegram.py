@@ -56,13 +56,14 @@ def send_telegram_alerts():
     ]
     cols_cal = ["calCost", "avgCalCost", "calGapPct", "pct_under_over_mean"]
     cols_und = ["underlying", "strike", "undPricePctDiff"]
-    cols_hist = ["undmean_avg_trade_class", "histEarningsCount", "Grade"]
+    cols_hist = ["undmean_avg_trade_class_combined_grade", "histEarningsCount", "Grade"]
     cols_extra = ["lastUpdated"]
+    cols_ml = ["prediction_label", "prediction_score_1"]
     cols_all = (
-        cols_iv + cols_spread + cols_earn + cols_oi + cols_cal + cols_und + cols_hist + cols_extra
+        cols_iv + cols_spread + cols_earn + cols_oi + cols_cal + cols_und + cols_hist + cols_extra + cols_ml
     )
     cols_alert = (
-        cols_earn + cols_und + cols_cal + cols_iv + cols_spread + cols_hist + cols_oi + cols_extra
+        cols_earn + cols_und + cols_cal + cols_iv + cols_spread + cols_hist + cols_oi + cols_extra + cols_ml
     )
 
     cols_duplicated = [item for item, count in Counter(cols_all).items() if count > 1]
@@ -72,7 +73,7 @@ def send_telegram_alerts():
     trade_query = f"""
         SELECT "{'", "'.join(cols_all)}"
         FROM "ThetaSnapshot"
-        WHERE "undmean_avg_trade_class" >= 1.25
+        WHERE "undmean_avg_trade_class_combined_grade" >= 1.25
         AND "lastUpdated" = (
             SELECT MAX("lastUpdated")
             FROM "ThetaSnapshot"
@@ -220,6 +221,7 @@ def send_telegram_alerts():
             "default": "⚪",
         }
         iv_consensus = {"High": "🟢", "Medium": "🟡", "Low": "🔴", "No Data": "⚪"}
+        
 
         for chat_id in chat_ids:
             messages = []
@@ -258,6 +260,16 @@ def send_telegram_alerts():
                     report_date = "{}".format(
                         pd.to_datetime(row["reportDate"], format="%Y%m%d").strftime("%b%d'%y")
                     )
+                    
+                    if row["prediction_score_1"] >0.9:
+                        preds = "🟢"
+                    elif row["prediction_score_1"] >0.75:
+                        preds = "🟡"
+                    elif row["prediction_score_1"] >0.5:
+                        preds = "🟠"
+                    else:
+                        preds = "🔴"
+                    
                     # Then construct the alert with explicit markdown link formatting
                     link_nasdaq = (
                         "https://www.nasdaq.com/market-activity/stocks/{}/earnings".format(
@@ -289,6 +301,7 @@ def send_telegram_alerts():
                         + "\n      IV Consensus: {} {}".format(
                             iv_comment, right + iv_consensus[iv_comment]
                         )
+                        + "\n      Prediction: {}".format(preds)
                         + "\n      BDTE: {}".format(row["bdte"])
                         + "\n      Strike: {}".format(row["strike"])
                         + "\n      Underlying: {}".format(row["underlying"])

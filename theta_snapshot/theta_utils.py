@@ -5,6 +5,9 @@ import pandas as pd
 import option_emporium as oe
 from typing import List
 from datetime import datetime as dt
+import numpy as np
+import pandas_market_calendars as mcal
+from typing import List
 from theta_snapshot import CalendarSnapData
 
 
@@ -390,3 +393,53 @@ def get_back_expiration_date(
             return int(bexp.strftime("%Y%m%d"))
 
     return None
+
+
+# --------------------------------------------------------------
+# Date Functions
+# --------------------------------------------------------------
+
+def days_before_calcs(
+    df: pd.DataFrame,
+    end_date_col: str,
+    target: str,
+    trading_days: List[pd.Timestamp],
+    from_date_col: str = None,
+):
+    target_columns = {
+        "earnings": ("bdte", "dte"),
+        "fexp": ("bdtfexp", "dtfexp"),
+        "dit": ("bdit", "dit"),
+    }
+    bdte_col, dte_col = target_columns.get(target)
+    start_dates = pd.to_datetime(df[from_date_col], format="%Y%m%d")
+    end_dates = pd.to_datetime(df[end_date_col], format="%Y%m%d")
+    start_indices = np.searchsorted(trading_days, start_dates.values)
+    end_indices = np.searchsorted(trading_days, end_dates.values)
+    df[bdte_col] = end_indices - start_indices
+    df[dte_col] = (end_dates - start_dates).dt.days
+    return df
+
+def calculate_buisness_days(df: pd.DataFrame):
+    nyse = mcal.get_calendar("NYSE")
+    min_date = pd.to_datetime(df["date"].min(), format="%Y%m%d")
+    max_date = pd.to_datetime(max(df["exp_front"]), format="%Y%m%d")
+    trading_days = nyse.schedule(start_date=min_date,end_date=max_date).index
+
+    df = days_before_calcs(
+        df=df,
+        end_date_col="reportDate",
+        target="earnings",
+        trading_days=trading_days,
+        from_date_col="date",
+    )
+
+    df = days_before_calcs(
+        df=df,
+        end_date_col="exp_front",
+        target="fexp",
+        trading_days=trading_days,
+        from_date_col="date",
+    )
+    return df
+        

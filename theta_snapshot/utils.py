@@ -413,7 +413,7 @@ def main_wrapper(func):
             time_taken = divmod((end - start), 60)
             log.info(f"Time taken: {time_taken[0]} minutes, {time_taken[1]} seconds")
         except Exception as err:
-            log.opt(exception=True).error(f"Error in {func.__name__}: {err}")
+            log.error(f"Error in main function: {err}")
             # TODO: add telegram alert to notify of error
 
     return wrapper

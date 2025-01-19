@@ -12,11 +12,12 @@ from theta_snapshot import (
     get_greeks_snapshot,
     get_quote_snapshot,
     get_oi_snapshot,
-    merge_snapshot,
+    merge_snapshot
 )
 
 pd.set_option("display.max_columns", None)
 log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
+
 
 def snapshot(symbol: str, rdate: pd.Timestamp, weeks: int, right: str = "C", roots: list = None):
     # symbol = "APO"

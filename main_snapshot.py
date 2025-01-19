@@ -19,7 +19,10 @@ from theta_snapshot import (
     main_wrapper,
     iv_features,
     send_telegram_alerts,
+    calculate_buisness_days,
+    generate_predictions,
 )
+
 
 
 log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
@@ -47,11 +50,12 @@ def main():
 
     # --------------------------------------------------------------
     log.info("Reading Earnings Calendar from DB")
-    maxgrade_query = """SELECT "symbol" FROM public."historicalBacktestGrades" GROUP BY "symbol" HAVING max(undmean_avg_trade_class) >= 1.25"""
+    maxgrade_query = """SELECT "symbol" FROM public."historicalBacktestGrades" GROUP BY "symbol" HAVING max(undmean_avg_trade_class_combined_grade) >= 1.25"""
     grade_symbols = read_from_db(query=maxgrade_query)["symbol"].unique()
     grade_query = f"""SELECT * FROM public."historicalBacktestGrades" WHERE symbol in {tuple(grade_symbols)} AND "weeks" <= '5' AND "latest" = TRUE"""
     grades = read_from_db(query=grade_query).drop(columns=["latest"])
     grades["weeks"] = grades["weeks"].astype(int)
+
 
     # --------------------------------------------------------------
 
@@ -97,7 +101,7 @@ def main():
         return
 
     calcost_query = """
-        SELECT symbol, bdte, "calCostPctMean", "weeks", "histEarningsCount" 
+        SELECT symbol, bdte, "calCostPctMean", "calCostPctStd", "calCostPctMax", "calCostPctMin", "weeks", "histEarningsCount" ,"histCalCostCount"
         FROM public."calCostPctBacktestMeans" 
         WHERE latest = True AND symbol in {}
     """.format(tuple(theta_df["symbol"].unique()))
@@ -137,7 +141,8 @@ def main():
     # Machine Learning
     # --------------------------------------------------------------
 
-    # TODO: Add ML Code
+    theta_df = calculate_buisness_days(theta_df)
+    theta_df = generate_predictions(theta_df)
 
     # --------------------------------------------------------------
     # Write to DB
@@ -145,6 +150,7 @@ def main():
     timestamp_update = int(dt.now().timestamp())
     theta_df = theta_df.assign(lastUpdated=timestamp_update)
     iv_df = iv_df.assign(lastUpdated=timestamp_update)
+    # write_to_db(theta_df, "ThetaSnapshot",if_exists="replace")
     append_to_table(theta_df, "ThetaSnapshot", indexes=["symbol", "lastUpdated", "bdte", "weeks"])
     append_to_table(iv_df, "ThetaIVSnapshot", indexes=["symbol", "lastUpdated"])
     log.info("Completed Snapshots and IVs")
@@ -155,8 +161,8 @@ def main():
     send_telegram_alerts()
 
     # TODO: Drop data oldert than 5 days
-    delete_old_data("ThetaSnapshot", 5)
-    delete_old_data("ThetaIVSnapshot", 5)
+    delete_old_data("ThetaSnapshot", 7)
+    delete_old_data("ThetaIVSnapshot", 7)
 
 
 if __name__ == "__main__":
