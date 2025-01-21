@@ -151,6 +151,8 @@ def main():
     theta_df = theta_df.assign(lastUpdated=timestamp_update)
     iv_df = iv_df.assign(lastUpdated=timestamp_update)
     # write_to_db(theta_df, "ThetaSnapshot",if_exists="replace")
+    # write_to_db(iv_df, "ThetaIVSnapshot",if_exists="replace")
+
     append_to_table(theta_df, "ThetaSnapshot", indexes=["symbol", "lastUpdated", "bdte", "weeks"])
     append_to_table(iv_df, "ThetaIVSnapshot", indexes=["symbol", "lastUpdated"])
     log.info("Completed Snapshots and IVs")
