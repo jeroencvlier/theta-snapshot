@@ -272,7 +272,7 @@ def trend_slicer(pred_df, trend_df):
     for idx, row in pred_df[['symbol','bdte', 'weeks']].drop_duplicates().iterrows():
         trade_slice = {'symbol':row.symbol, "weeks":row.weeks, 'bdte':row.bdte}
         bdtes = [*range(row.bdte,row.bdte+4)]
-        pre_slice = trend_df[trend_df['symbol']==row.symbol]
+        pre_slice = trend_df[(trend_df['symbol']==row.symbol)&(trend_df['weeks']==row.weeks)]
         pre_slice = pre_slice[pre_slice["bdte"].isin(bdtes)]
         pre_slice = pre_slice[pre_slice["count"] > 4].sort_values(by="bdte", ascending=True)   
         if (len(pre_slice) >= 3):
