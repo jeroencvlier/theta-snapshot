@@ -4,9 +4,10 @@ import logging as log
 import pandas as pd
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
+import joblib
 from datetime import datetime as dt
 import option_emporium as oe
-
+import yaml
 from theta_snapshot import (
     snapshot,
     read_from_db,
@@ -21,6 +22,7 @@ from theta_snapshot import (
     main_telegram,
     calculate_buisness_days,
     generate_predictions,
+    custom_mcc_metric
 )
 
 
@@ -140,7 +142,6 @@ def main():
     # --------------------------------------------------------------
     # Machine Learning
     # --------------------------------------------------------------
-
     theta_df = calculate_buisness_days(theta_df)
     theta_df = generate_predictions(theta_df)
 
@@ -163,8 +164,8 @@ def main():
     main_telegram()
 
     # TODO: Drop data oldert than 5 days
-    delete_old_data("ThetaSnapshot", 7)
-    delete_old_data("ThetaIVSnapshot", 7)
+    delete_old_data("ThetaSnapshot", 8)
+    delete_old_data("ThetaIVSnapshot", 8)
 
 
 if __name__ == "__main__":

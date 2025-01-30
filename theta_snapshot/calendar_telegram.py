@@ -260,15 +260,20 @@ def send_telegram_alerts():
                     report_date = "{}".format(
                         pd.to_datetime(row["reportDate"], format="%Y%m%d").strftime("%b%d'%y")
                     )
-                    
-                    if row["prediction_score_1"] >0.9:
-                        preds = "🟢"
-                    elif row["prediction_score_1"] >0.75:
-                        preds = "🟡"
-                    elif row["prediction_score_1"] >0.5:
-                        preds = "🟠"
-                    else:
-                        preds = "🔴"
+                    try:
+                        if row["prediction_score_1"] >0.95:
+                            preds = "💎"
+                        elif row["prediction_score_1"] >0.9:
+                            preds = "🟢"
+                        elif row["prediction_score_1"] >0.75:
+                            preds = "🟡"
+                        elif row["prediction_score_1"] >0.5:
+                            preds = "🟠"
+                        else:
+                            preds = "🔴"
+                    except:
+                        preds = "⚪"
+                       
                     
                     # Then construct the alert with explicit markdown link formatting
                     link_nasdaq = (
