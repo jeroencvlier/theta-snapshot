@@ -164,8 +164,8 @@ def main():
     main_telegram()
 
     # TODO: Drop data oldert than 5 days
-    delete_old_data("ThetaSnapshot", 8)
-    delete_old_data("ThetaIVSnapshot", 8)
+    delete_old_data("ThetaSnapshot", 15)
+    delete_old_data("ThetaIVSnapshot", 15)
 
 
 if __name__ == "__main__":

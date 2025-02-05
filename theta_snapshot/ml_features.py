@@ -270,6 +270,7 @@ def trend_slicer(pred_df, trend_df):
     
     final_slice = []
     for idx, row in pred_df[['symbol','bdte', 'weeks']].drop_duplicates().iterrows():
+        
         trade_slice = {'symbol':row.symbol, "weeks":row.weeks, 'bdte':row.bdte}
         bdtes = [*range(row.bdte,row.bdte+4)]
         pre_slice = trend_df[(trend_df['symbol']==row.symbol)&(trend_df['weeks']==row.weeks)]
@@ -281,13 +282,13 @@ def trend_slicer(pred_df, trend_df):
                 nas = pre_slice.isna().sum().sum()
                 if nas > 0:
                     log.info(f"NA values found in grouped_pre_slice: {nas}")    
-                for index, row in pre_slice.iterrows():
-                    row.pop("bdte")
-                    row.pop("symbol")
-                    row.pop("weeks")
-                    rename_cols = {k: f"pre_{int(index)}_{k}" for k in row.keys()}
-                    row = row.rename(rename_cols)
-                    trade_slice.update(row.to_dict())
+                for index, row2 in pre_slice.iterrows():
+                    row2.pop("bdte")
+                    row2.pop("symbol")
+                    row2.pop("weeks")
+                    rename_cols = {k: f"pre_{int(index)}_{k}" for k in row2.keys()}
+                    row2 = row2.rename(rename_cols)
+                    trade_slice.update(row2.to_dict())
                 final_slice.append(trade_slice)
                 
     return pd.DataFrame(final_slice)
