@@ -154,7 +154,7 @@ def generate_predictions(theta_df):
         ml_pipe = joblib.load(model_path)
         
         preds = pd.DataFrame(ml_pipe.predict_proba(pred_df)).rename(columns={0:"prediction_score_0", 1:"prediction_score_1"})
-        preds['prediction_label'] = preds['prediction_score_1'].apply(lambda x: 1 if x > 0.9 else 0)
+        preds['prediction_label'] = preds['prediction_score_1'].apply(lambda x: 1 if x > 0.95 else 0)
         pred_df = pd.concat([preds,pred_df],axis=1) 
         theta_df = theta_df.merge(pred_df[["symbol", "strike", "right", "exp_front", "weeks","prediction_label", "prediction_score_0", "prediction_score_1"]], on=["symbol", "strike", "right", "exp_front", "weeks"], how="left")
 
