@@ -306,7 +306,7 @@ def send_telegram_alerts():
                         + "\n      IV Consensus: {} {}".format(
                             iv_comment, right + iv_consensus[iv_comment]
                         )
-                        + "\n      Prediction: {}".format(preds)
+                        + "\n      Prediction: {} ({})".format(preds, round(row["prediction_score_1"],3))
                         + "\n      BDTE: {}".format(row["bdte"])
                         + "\n      Strike: {}".format(row["strike"])
                         + "\n      Underlying: {}".format(row["underlying"])

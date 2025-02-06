@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import pandas as pd
-from pycaret.classification import load_model, predict_model
 from datetime import datetime as dt
 from theta_snapshot.utils import read_from_db
 import logging as log
