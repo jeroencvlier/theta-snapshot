@@ -18,18 +18,18 @@ log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 # --------------------------------------------------------------
 # Filter presets
 # --------------------------------------------------------------
-min_dbte = 6
-max_dbte = 14
+min_dbte = 5
+max_dbte = 12
 min_histearningscount = 7
-min_class = 1.25
+min_class = 1.00
 cal_gap_pct = {"1": 0.1, "2": 0.175, "3": 0.25, "4": 0.325, "5": 0.40, "6": 0.475}
 min_oi = 5
 min_size = 10
-pct_under_over_mean = -0.05
+pct_under_over_mean = -0.0
 min_spread = 0.3
 min_cal_spread = 0.6
 min_cost = 0.5
-max_cost = 5
+max_cost = 10
 
 
 # --------------------------------------------------------------
