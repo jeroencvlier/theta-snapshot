@@ -40,7 +40,7 @@ def get_folder_name() -> str:
 # --------------------------------------------------------------
 # Prepare inputs for the multi-processors
 # --------------------------------------------------------------
-def prepare_inputs(ticker, expirations, existing_files, gaps=5):
+def prepare_inputs(ticker, expirations, existing_files, gaps=4):
     inputs = []
     fexps = [
         d
@@ -80,10 +80,10 @@ def thread_historical_queries(
 ):
     if fb == "front":
         exp = kwargs["fexp"]
-        attr_name = f"{attr_name}_front"
+        attr_name = f"{base_params['right']}_{attr_name}_front"
     elif fb == "back":
         exp = kwargs["bexps"][gap - 1]
-        attr_name = f"{attr_name}_back_G{gap}"
+        attr_name = f"{base_params['right']}_{attr_name}_back_G{gap}"
     else:
         raise ValueError("Invalid front/back value")
 
@@ -113,7 +113,7 @@ def thread_historical_queries(
 
 def merge_historical_snapshot(dfss, df_key, cols=None):
     if cols is None:
-        cols = ["symbol", "right", "date", "ms_of_day", "strike_milli"]
+        cols = ["symbol", "date", "ms_of_day", "strike_milli"]
 
     # Get matching DataFrames with their keys
     matching_items = [(k, df) for k, df in dfss.items() if df_key in k]
@@ -154,7 +154,9 @@ def historical_snapshot(kwargs):
     f_dates = get_exp_trading_days(roots=kwargs["roots"], exp=kwargs["fexp"])
     b_dates = [get_exp_trading_days(roots=kwargs["roots"], exp=d) for d in kwargs["bexps"]]
     trade_dates = find_common_elements(b_dates + [f_dates])
-    if len(trade_dates) < 5:
+
+    # print(len(trade_dates))
+    if len(trade_dates) < 3:
         return kwargs["filepath"]
 
     # Strikes
@@ -233,7 +235,6 @@ def historical_snapshot(kwargs):
             njobs=-1,
         )
         dfss.update(dfs)
-
     if any([df is None for df in dfss.items()]):
         log.info(f"Snapshot data is missing for {kwargs['fexp']}, dropping the symbol")
         return kwargs["filepath"]
@@ -242,7 +243,7 @@ def historical_snapshot(kwargs):
     quotes = merge_historical_snapshot(dfss, "quotes")
 
     cal = pd.merge(
-        greeks, quotes, on=["ms_of_day", "date", "strike_milli", "right", "symbol"], how="inner"
+        greeks, quotes, on=["ms_of_day", "date", "strike_milli", "symbol"], how="inner"
     ).sort_values(by=["strike_milli", "date", "ms_of_day"])
 
     if cal.empty:
