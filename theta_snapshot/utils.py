@@ -363,28 +363,33 @@ def check_indexes(table_name: str):
 # --------------------------------------------------------------
 
 
-def is_market_open(break_Script=True) -> bool:
-    try:
-        url = f"https://api.polygon.io/v1/marketstatus/now?apiKey={os.getenv('naughty_hermann')}"
-        response = httpx.get(url)
-        if response.json()["market"].lower() == "open":
-            log.info("Market is open")
+def is_market_open(break_Script=True, bypass=False) -> bool:
+    if bypass:
+        return True
+    else:
+        try:
+            url = (
+                f"https://api.polygon.io/v1/marketstatus/now?apiKey={os.getenv('naughty_hermann')}"
+            )
+            response = httpx.get(url)
+            if response.json()["market"].lower() == "open":
+                log.info("Market is open")
+                is_open = True
+            else:
+                log.info("Market is closed")
+                is_open = False
+        except Exception as e:
+            log.error(f"Failed to fetch market status - {e}")
+            log.info("Building calendar with assumption that market is open")
             is_open = True
-        else:
-            log.info("Market is closed")
-            is_open = False
-    except Exception as e:
-        log.error(f"Failed to fetch market status - {e}")
-        log.info("Building calendar with assumption that market is open")
-        is_open = True
 
-    finally:
-        if break_Script and not is_open:
-            log.info("Market is closed")
-            sys.exit(0)
-        else:
-            log.warning("Bypassing market open check...")
-            return is_open
+        finally:
+            if break_Script and not is_open:
+                log.info("Market is closed")
+                sys.exit(0)
+            else:
+                log.warning("Bypassing market open check...")
+                return is_open
 
 
 def time_checker_ny(target_hour=9, target_minute=34, break_Script=True):

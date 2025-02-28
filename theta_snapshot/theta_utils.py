@@ -109,6 +109,13 @@ def get_expiry_dates(roots: List[str]):
     return exp_dates
 
 
+def get_option_roots():
+    url = os.getenv("BASE_URL") + "/list/roots/option"
+    params = {}
+    response, _ = request_pagination(url, params)
+    return response
+
+
 def get_greeks(symbol: str, exp: int, right: str):
     url = os.getenv("BASE_URL") + "/bulk_snapshot/option/greeks"
     params = {"root": symbol, "exp": exp, "right": right}
@@ -187,7 +194,7 @@ def get_greeks_historical(
     )
     df.drop(
         # columns=["bid_condition", "bid_exchange", "ask_condition", "ask_exchange"],
-        columns=["bid", "ask"],
+        columns=["bid", "ask", "ms_of_day2"],
         inplace=True,
     )
     return df
@@ -399,6 +406,7 @@ def get_back_expiration_date(
 # Date Functions
 # --------------------------------------------------------------
 
+
 def days_before_calcs(
     df: pd.DataFrame,
     end_date_col: str,
@@ -420,11 +428,12 @@ def days_before_calcs(
     df[dte_col] = (end_dates - start_dates).dt.days
     return df
 
+
 def calculate_buisness_days(df: pd.DataFrame):
     nyse = mcal.get_calendar("NYSE")
     min_date = pd.to_datetime(df["date"].min(), format="%Y%m%d")
     max_date = pd.to_datetime(max(df["exp_front"]), format="%Y%m%d")
-    trading_days = nyse.schedule(start_date=min_date,end_date=max_date).index
+    trading_days = nyse.schedule(start_date=min_date, end_date=max_date).index
 
     df = days_before_calcs(
         df=df,
@@ -442,4 +451,3 @@ def calculate_buisness_days(df: pd.DataFrame):
         from_date_col="date",
     )
     return df
-        
