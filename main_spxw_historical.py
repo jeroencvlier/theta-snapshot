@@ -8,7 +8,7 @@ import pyarrow as pa
 from tqdm import tqdm
 import itertools
 from functools import reduce
-
+import random
 
 from theta_snapshot import (
     CalendarSnapData,
@@ -281,6 +281,7 @@ if __name__ == "__main__":
     # --------------------------------------------------------------
     # Start the process
     # --------------------------------------------------------------
+    random.shuffle(inputs)
     tf = len(inputs)
     inputs = [kwargs for kwargs in inputs if kwargs["filepath"] not in failed_files]
 
@@ -288,13 +289,13 @@ if __name__ == "__main__":
     log.info(f"Total Inputs: {len(inputs)}")
     log.info(f"Removed {tf - len(inputs)} failed files")
 
-    for batch in batched(inputs, 80):
+    for batch in batched(inputs, 5):
         cpus = 4
         if is_market_open(break_Script=False, bypass=True):
-            cpus = 1
+            cpus = 2
             log.info(f"Market is open, reducing the number of CPUs to {cpus}")
-        for kwargs in batch:
-            print(kwargs)
+        # for kwargs in batch:
+        #    print(kwargs)
         failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=10)(
             delayed(historical_snapshot)(kwargs) for kwargs in batch
         )
