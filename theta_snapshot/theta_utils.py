@@ -47,8 +47,13 @@ def request_pagination(url, params, max_retries=10, timeout=120.0):
                 responses.extend(data.get("response", []))
 
                 # Handle pagination
-                next_page = response.headers.get("Next-Page")
-                url = next_page if next_page and next_page != "null" else None
+                # next_page = response.headers.get("Next-Page")
+                # url = next_page if next_page and next_page != "null" else None
+                if "Next-Page" in response.headers and response.headers["Next-Page"] != "null":
+                    url = response.headers["Next-Page"]
+                    params = None
+                else:
+                    url = None
 
         except httpx.RequestError as e:
             log.error(f"Request error: {e}")
@@ -244,6 +249,24 @@ def get_oi_historical(
         right=base_params["right"],
         symbol=symbol,
     )
+    return df
+
+
+def get_bulk_oi_historical(
+    symbol: str,
+    roots: str,
+    exp: int,
+    strike: int,
+    base_params: dict,
+):
+    url = os.getenv("BASE_URL") + "/bulk_hist/option/open_interest"
+    params = {
+        **base_params,
+        "exp": "0",
+    }
+    df = multi_root_query_df(roots=roots, params=params, url=url)
+    if df.empty or df is None:
+        return None
     return df
 
 
