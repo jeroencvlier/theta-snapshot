@@ -455,7 +455,7 @@ if __name__ == "__main__":
             log.info(f"Market is open, reducing the number of CPUs to {cpus}")
         for kwargs in batch:
             print(kwargs)
-        failed_returns = Parallel(n_jobs=cpus, verbose=10)(  # backend="loky",
+        failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=10)(
             delayed(historical_snapshot)(kwargs) for kwargs in batch
         )
 
