@@ -379,7 +379,7 @@ if __name__ == "__main__":
     first_dates = pd.Timestamp("2016-01-01").strftime("%Y%m%d")  # Standard subscription
     expirations = [d for d in expirations if d > int(first_dates)]
 
-    exps_list = Parallel(n_jobs=os.cpu_count(), backend="multiprocessing", verbose=0)(
+    exps_list = Parallel(n_jobs=-1, backend="multiprocessing", verbose=0)(
         delayed(expiration_loop)(ticker=ticker, exp=exp) for exp in tqdm(expirations)
     )
     exp_map = {}
@@ -448,7 +448,7 @@ if __name__ == "__main__":
     log.info(f"Removed {tf - len(inputs)} failed files")
 
     for batch in batched(inputs, 50):
-        cpus = os.cpu_count()
+        cpus = -1
         if is_market_open(break_Script=False, bypass=False):
             cpus = 1
             log.info(f"Market is open, reducing the number of CPUs to {cpus}")
