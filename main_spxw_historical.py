@@ -366,7 +366,7 @@ if __name__ == "__main__":
     # Input Parameters
     # --------------------------------------------------------------
     ivl = 900000  # 15 minutes
-    n_calendars = 3
+    n_calendars = 5
     min_trading_dates = 5
     max_date_diff = 90
     ticker = "SPY"
