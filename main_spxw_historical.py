@@ -450,8 +450,8 @@ if __name__ == "__main__":
 
     for batch in batched(inputs, 5):
         cpus = 4
-        if is_market_open(break_Script=False, bypass=True):
-            cpus = 2
+        if is_market_open(break_Script=False, bypass=False):
+            cpus = 1
             log.info(f"Market is open, reducing the number of CPUs to {cpus}")
         for kwargs in batch:
             print(kwargs)
