@@ -448,7 +448,7 @@ if __name__ == "__main__":
     log.info(f"Total Inputs: {len(inputs)}")
     log.info(f"Removed {tf - len(inputs)} failed files")
 
-    for batch in batched(inputs, 5):
+    for batch in batched(inputs, 50):
         cpus = -1
         if is_market_open(break_Script=False, bypass=False):
             cpus = 1
