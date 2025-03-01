@@ -337,7 +337,7 @@ def historical_snapshot(kwargs):
 #         return None
 
 
-def expiration_loop(roots, exp):
+def expiration_loop(ticker, exp):
     exps = get_exp_trading_days(roots=ticker, exp=exp)
     return {exp: exps}
 
@@ -380,8 +380,8 @@ if __name__ == "__main__":
     first_dates = pd.Timestamp("2016-01-01").strftime("%Y%m%d")  # Standard subscription
     expirations = [d for d in expirations if d > int(first_dates)]
 
-    exps_list = Parallel(n_jobs=50, backend="threading", verbose=0)(
-        delayed(expiration_loop)(roots=ticker, exp=exp) for exp in tqdm(expirations)
+    exps_list = Parallel(n_jobs=-1, backend="multiprocessing", verbose=0)(
+        delayed(expiration_loop)(ticker=ticker, exp=exp) for exp in tqdm(expirations)
     )
     exp_map = {}
     for exp in exps_list:
@@ -449,7 +449,7 @@ if __name__ == "__main__":
     log.info(f"Removed {tf - len(inputs)} failed files")
 
     for batch in batched(inputs, 5):
-        cpus = 4
+        cpus = -1
         if is_market_open(break_Script=False, bypass=False):
             cpus = 1
             log.info(f"Market is open, reducing the number of CPUs to {cpus}")
