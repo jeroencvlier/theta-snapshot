@@ -17,7 +17,6 @@ from theta_snapshot import (
     get_exp_trading_days,
     batched,
     is_market_open,
-    time_checker_ny,
 )
 
 log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
@@ -155,16 +154,19 @@ def expiration_loop(ticker, exp):
     return {exp: trading_days}
 
 
-def true_after_time_ny(target_hour=9, target_minute=30):
+def true_between_time_ny(start_hour=7, end_hour=10):
     new_york_tz = pytz.timezone("America/New_York")
     current_time_ny = dt.datetime.now(new_york_tz)
-    target_time = current_time_ny.replace(
-        hour=target_hour, minute=target_minute, second=0, microsecond=0
-    )
-    if current_time_ny < target_time:
-        return False
-    else:
+    start_time = current_time_ny.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    end_time = current_time_ny.replace(hour=end_hour, minute=0, second=0, microsecond=0)
+    # Check if current day is a weekday (Monday=0, Friday=4)
+    is_weekday = current_time_ny.weekday() <= 4
+
+    # Return True if it's a weekday AND between the specified hours
+    if is_weekday and (current_time_ny > start_time) and (current_time_ny < end_time):
         return True
+    else:
+        return False
 
 
 if __name__ == "__main__":
@@ -210,12 +212,11 @@ if __name__ == "__main__":
     bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
     existing_files = bucket.list_files(get_folder_name())
 
-    for batch in batched(sliced_exp_list, 10):
+    for batch in batched(sliced_exp_list, 12):
         cpus = -1
-        if true_after_time_ny(target_hour=7, target_minute=0):
-            if is_market_open(break_Script=False):
-                cpus = 1
-                log.info(f"Market is open, reducing the number of CPUs to {cpus}")
+        if is_market_open(break_Script=False) or true_between_time_ny():
+            cpus = 1
+            log.info(f"Reducing the number of CPUs to {cpus}")
 
         _ = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=0)(
             delayed(historical_snapshot)(
