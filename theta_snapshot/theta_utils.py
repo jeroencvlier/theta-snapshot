@@ -52,6 +52,7 @@ def request_pagination(url, params, max_retries=10, timeout=120.0):
                 if "Next-Page" in response.headers and response.headers["Next-Page"] != "null":
                     url = response.headers["Next-Page"]
                     params = None
+                    log.info("Paginating Request to: %s", url)
                 else:
                     url = None
 
@@ -252,22 +253,32 @@ def get_oi_historical(
     return df
 
 
-def get_bulk_oi_historical(
-    symbol: str,
-    roots: str,
-    exp: int,
-    strike: int,
-    base_params: dict,
-):
-    url = os.getenv("BASE_URL") + "/bulk_hist/option/open_interest"
-    params = {
-        **base_params,
-        "exp": "0",
-    }
-    df = multi_root_query_df(roots=roots, params=params, url=url)
-    if df.empty or df is None:
-        return None
-    return df
+# def get_bulk_oi_historical(
+#     roots: list[str],
+#     base_params: dict,
+# ):
+#     url = os.getenv("BASE_URL") + "/bulk_hist/option/open_interest"
+#     params = {
+#         **base_params,
+#     }
+#     df = multi_root_query_df(roots=roots, params=params, url=url)
+#     if df.empty or df is None:
+#         return None
+#     return df
+
+
+# def get_bulk_quote_historical(
+#     roots: list[str],
+#     base_params: dict,
+# ):
+#     url = os.getenv("BASE_URL") + "/bulk_hist/option/quote"
+#     params = {
+#         **base_params,
+#     }
+#     df = multi_root_query_df(roots=roots, params=params, url=url)
+#     if df.empty or df is None:
+#         return None
+#     return df
 
 
 # --------------------------------------------------------------

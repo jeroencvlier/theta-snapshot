@@ -25,6 +25,7 @@ from theta_snapshot import (
     batched,
     is_market_open,
     get_option_roots,
+    get_bulk_quote_historical,
 )
 
 log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
