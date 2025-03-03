@@ -221,7 +221,7 @@ if __name__ == "__main__":
             delayed(historical_snapshot)(
                 exp_dict=exp_dict, ticker=ticker, ivl=ivl, existing_files=existing_files
             )
-            for exp_dict in tqdm()
+            for exp_dict in tqdm(batch)
         )
 
     log.info("All Done")
