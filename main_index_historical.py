@@ -181,7 +181,7 @@ if __name__ == "__main__":
     # Prepare Inputs
     # --------------------------------------------------------------
     expirations = get_expiry_dates(ticker)
-    first_dates = pd.Timestamp("2023-01-01").strftime("%Y%m%d")  # Standard subscription
+    first_dates = pd.Timestamp("2022-01-01").strftime("%Y%m%d")  # Standard subscription
     expirations = [d for d in expirations if d > int(first_dates)]
 
     exps_list = Parallel(n_jobs=-1, backend="multiprocessing", verbose=0)(
