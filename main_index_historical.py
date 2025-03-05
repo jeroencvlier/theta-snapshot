@@ -175,13 +175,13 @@ if __name__ == "__main__":
     # --------------------------------------------------------------
     ivl = 900000  # 15 minutes
     ticker = "SPY"
-    max_trading_days = 30
+    max_trading_days = 45
 
     # --------------------------------------------------------------
     # Prepare Inputs
     # --------------------------------------------------------------
     expirations = get_expiry_dates(ticker)
-    first_dates = pd.Timestamp("2022-01-01").strftime("%Y%m%d")  # Standard subscription
+    first_dates = pd.Timestamp("2021-01-01").strftime("%Y%m%d")  # Standard subscription
     expirations = [d for d in expirations if d > int(first_dates)]
 
     exps_list = Parallel(n_jobs=-1, backend="multiprocessing", verbose=0)(
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
     existing_files = bucket.list_files(get_folder_name())
 
-    for batch in batched(sliced_exp_list, 12):
+    for batch in batched(sliced_exp_list, 20):
         cpus = -1
         if is_market_open(break_Script=False) or true_between_time_ny():
             cpus = 1
