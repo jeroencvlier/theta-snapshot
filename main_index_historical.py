@@ -174,55 +174,56 @@ if __name__ == "__main__":
     # Input Parameters
     # --------------------------------------------------------------
     ivl = 900000  # 15 minutes
-    ticker = "SPY"
+    tickers = ["SPY", "SPXW"]
     max_trading_days = 45
 
     # --------------------------------------------------------------
     # Prepare Inputs
     # --------------------------------------------------------------
-    expirations = get_expiry_dates(ticker)
-    first_dates = pd.Timestamp("2017-01-01").strftime("%Y%m%d")  # Standard subscription
-    expirations = [d for d in expirations if d > int(first_dates)]
+    for ticker in tickers:
+        expirations = get_expiry_dates(ticker)
+        first_dates = pd.Timestamp("2016-01-01").strftime("%Y%m%d")  # Standard subscription
+        expirations = [d for d in expirations if d > int(first_dates)]
 
-    exps_list = Parallel(n_jobs=-1, backend="multiprocessing", verbose=0)(
-        delayed(expiration_loop)(ticker=ticker, exp=exp) for exp in tqdm(expirations)
-    )
-
-    sliced_exp_list = []
-    for d in exps_list:
-        [(k, v)] = d.items()
-        # if max(v) == k:
-        nv = sorted(v)[-max_trading_days:]
-        sliced_exp_list.append({k: nv})
-        # else:
-        # break
-
-    sum([len(v) for d in exps_list for k, v in d.items()])
-    sum([len(v) for d in sliced_exp_list for k, v in d.items()])
-
-    # --------------------------------------------------------------
-    # Start the process
-    # --------------------------------------------------------------
-    random.shuffle(exps_list)
-    random.shuffle(sliced_exp_list)
-
-    for exp_dict in exps_list:
-        pass
-
-    bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
-    existing_files = bucket.list_files(get_folder_name())
-
-    for batch in batched(sliced_exp_list, 20):
-        cpus = -1
-        if is_market_open(break_Script=False) or true_between_time_ny():
-            cpus = 1
-            log.info(f"Reducing the number of CPUs to {cpus}")
-
-        _ = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=0)(
-            delayed(historical_snapshot)(
-                exp_dict=exp_dict, ticker=ticker, ivl=ivl, existing_files=existing_files
-            )
-            for exp_dict in tqdm(batch)
+        exps_list = Parallel(n_jobs=-1, backend="multiprocessing", verbose=0)(
+            delayed(expiration_loop)(ticker=ticker, exp=exp) for exp in tqdm(expirations)
         )
 
-    log.info("All Done")
+        sliced_exp_list = []
+        for d in exps_list:
+            [(k, v)] = d.items()
+            # if max(v) == k:
+            nv = sorted(v)[-max_trading_days:]
+            sliced_exp_list.append({k: nv})
+            # else:
+            # break
+
+        sum([len(v) for d in exps_list for k, v in d.items()])
+        sum([len(v) for d in sliced_exp_list for k, v in d.items()])
+
+        # --------------------------------------------------------------
+        # Start the process
+        # --------------------------------------------------------------
+        random.shuffle(exps_list)
+        random.shuffle(sliced_exp_list)
+
+        for exp_dict in exps_list:
+            pass
+
+        bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
+        existing_files = bucket.list_files(get_folder_name())
+
+        for batch in batched(sliced_exp_list, 20):
+            cpus = -1
+            if is_market_open(break_Script=False) or true_between_time_ny():
+                cpus = 1
+                log.info(f"Reducing the number of CPUs to {cpus}")
+
+            _ = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=0)(
+                delayed(historical_snapshot)(
+                    exp_dict=exp_dict, ticker=ticker, ivl=ivl, existing_files=existing_files
+                )
+                for exp_dict in tqdm(batch)
+            )
+
+        log.info("All Done")
