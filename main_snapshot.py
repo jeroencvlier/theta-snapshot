@@ -142,7 +142,7 @@ def main():
     # --------------------------------------------------------------
     # Machine Learning
     # --------------------------------------------------------------
-    theta_df = calculate_buisness_days(theta_df)
+    theta_df = calculate_buisness_days(theta_df)        
     theta_df = generate_predictions(theta_df)
 
     # --------------------------------------------------------------
