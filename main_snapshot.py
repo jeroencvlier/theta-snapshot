@@ -22,9 +22,8 @@ from theta_snapshot import (
     main_telegram,
     calculate_buisness_days,
     generate_predictions,
-    custom_mcc_metric
+    custom_mcc_metric,
 )
-
 
 
 log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
@@ -57,7 +56,6 @@ def main():
     grade_query = f"""SELECT * FROM public."historicalBacktestGrades" WHERE symbol in {tuple(grade_symbols)} AND "weeks" <= '5' AND "latest" = TRUE"""
     grades = read_from_db(query=grade_query).drop(columns=["latest"])
     grades["weeks"] = grades["weeks"].astype(int)
-
 
     # --------------------------------------------------------------
 
@@ -142,7 +140,7 @@ def main():
     # --------------------------------------------------------------
     # Machine Learning
     # --------------------------------------------------------------
-    theta_df = calculate_buisness_days(theta_df)        
+    theta_df = calculate_buisness_days(theta_df)
     theta_df = generate_predictions(theta_df)
 
     # --------------------------------------------------------------
@@ -164,8 +162,8 @@ def main():
     main_telegram()
 
     # TODO: Drop data oldert than 5 days
-    delete_old_data("ThetaSnapshot", 15)
-    delete_old_data("ThetaIVSnapshot", 15)
+    delete_old_data("ThetaSnapshot", 30)
+    delete_old_data("ThetaIVSnapshot", 30)
 
 
 if __name__ == "__main__":
