@@ -10,7 +10,7 @@ import random
 import httpx  # install via pip install httpx
 import csv
 import pytz
-
+import numpy as np
 from theta_snapshot import (
     S3Handler,
     get_expiry_dates,
@@ -147,6 +147,7 @@ def historical_snapshot(exp_dict, ticker, ivl, existing_files):
 
             except Exception as error:
                 log.warning("Failure at exp %s and date %s, error: %s", exp, date, error)
+                return [greek_filename, oi_filename, quote_filename]
 
 
 def expiration_loop(ticker, exp):
@@ -192,15 +193,26 @@ if __name__ == "__main__":
         sliced_exp_list = []
         for d in exps_list:
             [(k, v)] = d.items()
-            # if max(v) == k:
             nv = sorted(v)[-max_trading_days:]
             sliced_exp_list.append({k: nv})
-            # else:
-            # break
 
         sum([len(v) for d in exps_list for k, v in d.items()])
         sum([len(v) for d in sliced_exp_list for k, v in d.items()])
 
+        # --------------------------------------------------------------
+        # Create Failed Files
+        # --------------------------------------------------------------
+        bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
+        existing_files = bucket.list_files(get_folder_name() + ticker)
+
+        failed_files_path = f"{get_folder_name()}/failed_files_{ticker}.parquet"
+        if bucket.file_exists(failed_files_path):
+            failed_df = bucket.read_dataframe(failed_files_path, format="parquet")
+            failed_files = failed_df["filepath"].tolist()
+            log.info(f"Found {len(failed_files)} failed files for {ticker}")
+            existing_files.extend(failed_files)
+        else:
+            failed_files = []
         # --------------------------------------------------------------
         # Start the process
         # --------------------------------------------------------------
@@ -210,20 +222,28 @@ if __name__ == "__main__":
         for exp_dict in exps_list:
             pass
 
-        bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
-        existing_files = bucket.list_files(get_folder_name())
-
         for batch in batched(sliced_exp_list, 20):
             cpus = -1
             if is_market_open(break_Script=False) or true_between_time_ny():
                 cpus = 1
                 log.info(f"Reducing the number of CPUs to {cpus}")
 
-            _ = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=0)(
+            failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=0)(
                 delayed(historical_snapshot)(
                     exp_dict=exp_dict, ticker=ticker, ivl=ivl, existing_files=existing_files
                 )
                 for exp_dict in tqdm(batch)
             )
+            failed_returns = [f for f in failed_returns if f is not None]
+            if len(failed_returns) > 0:
+                failed_files.extend(list(np.flatten(failed_returns)))
+                failed_files_df = pd.DataFrame(failed_files, columns=["filepath"])
+                table = pa.Table.from_pandas(failed_files_df)
+                bucket.upload_table(table, failed_files_path)
 
-        log.info("All Done")
+        log.info(f"Completed {ticker}")
+    log.info("All Done")
+    # empty df and upload to S3
+    failed_files_df = pd.DataFrame(columns=["filepath"])
+    table = pa.Table.from_pandas(failed_files_df)
+    bucket.upload_table(table, failed_files_path)
