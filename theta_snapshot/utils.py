@@ -10,6 +10,8 @@ from itertools import islice
 from sqlalchemy import create_engine
 from sqlalchemy.sql import text
 from typing import List
+import json
+
 
 # import logging
 import httpx
@@ -237,9 +239,7 @@ def create_composite_index(table_name: str, columns: list, index_name: str = Non
         with conn.begin() as transaction:  # Use transaction context
             transaction.execute(text(query))  # Use SQLAlchemy text()
             transaction.commit()
-        log.info(
-            f"Composite index {index_name} created successfully on {table_name}({columns_str})"
-        )
+        log.info(f"Composite index {index_name} created successfully on {table_name}({columns_str})")
     except Exception as err:
         log.error(f"Failed to create composite index {index_name}. ERROR: {err}")
 
@@ -296,9 +296,7 @@ def delete_old_data(table_name: str = "ThetaSnapshot", days: int = 7) -> None:
         log.info(f"Initial row count in {table_name}: {initial_count}")
         log.info(f"Rows deleted: {rows_deleted}")
         log.info(f"Remaining rows: {remaining_rows}")
-        log.info(
-            f"Successfully deleted {rows_deleted} rows older than {days} days from {table_name}"
-        )
+        log.info(f"Successfully deleted {rows_deleted} rows older than {days} days from {table_name}")
     except Exception as err:
         log.error(f"Failed to delete old data from {table_name}. ERROR: {err}")
 
@@ -368,9 +366,7 @@ def is_market_open(break_Script=True, bypass=False) -> bool:
         return True
     else:
         try:
-            url = (
-                f"https://api.polygon.io/v1/marketstatus/now?apiKey={os.getenv('naughty_hermann')}"
-            )
+            url = f"https://api.polygon.io/v1/marketstatus/now?apiKey={os.getenv('naughty_hermann')}"
             response = httpx.get(url)
             if response.json()["market"].lower() == "open":
                 log.info("Market is open")
@@ -395,9 +391,7 @@ def is_market_open(break_Script=True, bypass=False) -> bool:
 def time_checker_ny(target_hour=9, target_minute=34, break_Script=True):
     new_york_tz = pytz.timezone("America/New_York")
     current_time_ny = dt.now(new_york_tz)
-    target_time = current_time_ny.replace(
-        hour=target_hour, minute=target_minute, second=0, microsecond=0
-    )
+    target_time = current_time_ny.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
     if current_time_ny < target_time:
         # datetime.datetime(2024, 12, 28, 6, 57, 10, 157880, tzinfo=<DstTzInfo 'America/New_York' EST-1 day, 19:00:00 STD>)
         log.info(f"{current_time_ny.strftime('%Y-%m-%d %H:%M:%S %Z')} -> Current Time")
@@ -534,9 +528,7 @@ class S3Handler:
             # log.info(f"Uploading {local_path} to {self.bucket_name}/{s3_path}")
 
             with open(local_path, "rb") as f:
-                self.client.put_object(
-                    Bucket=self.bucket_name, Key=s3_path, Body=f.read(), **extra_args
-                )
+                self.client.put_object(Bucket=self.bucket_name, Key=s3_path, Body=f.read(), **extra_args)
             # log.info(f"Successfully uploaded {local_path} to {s3_path}")
 
         except botocore.exceptions.ClientError as e:
@@ -599,6 +591,55 @@ class S3Handler:
         except Exception as e:
             log.error(f"Unexpected error downloading file: {str(e)}")
             raise
+
+    def save_json_to_s3(self, file, s3_path):
+        try:
+            # Convert dictionary to JSON string
+            json_str = json.dumps(file)
+
+            # Create a buffer
+            buffer = io.BytesIO(json_str.encode())
+            buffer.seek(0)
+
+            # Upload to S3
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_path.lstrip("/"),
+                Body=buffer.getvalue(),
+                ContentType="application/json",
+            )
+
+        except Exception as e:
+            log.error(f"Error saving JSON to S3: {str(e)}")
+            raise
+
+    def load_json_from_s3(self, s3_path):
+        try:
+            s3_path = s3_path.lstrip("/")
+
+            # Get the object from S3
+            response = self.client.get_object(Bucket=self.bucket_name, Key=s3_path)
+
+            # Read the data and decode it
+            json_str = response["Body"].read().decode("utf-8")
+
+            # Parse the JSON string
+            data = json.loads(json_str)
+
+            return data
+
+        except botocore.exceptions.ClientError as e:
+            error = e.response.get("Error", {})
+            error_code = error.get("Code", "Unknown")
+            error_message = error.get("Message", str(e))
+            log.error(f"Error loading JSON from S3 ({error_code}): {error_message}")
+            return None
+        except json.JSONDecodeError as e:
+            log.error(f"Error decoding JSON from S3: {str(e)}")
+            return None
+        except Exception as e:
+            log.error(f"Unexpected error loading JSON from S3: {str(e)}")
+            return None
 
     def write_dataframe(self, df, s3_path, format="csv", **kwargs):
         """Write DataFrame directly to S3"""
@@ -751,3 +792,25 @@ class S3Handler:
         except Exception as e:
             log.error(f"Error uploading Table: {str(e)}")
             raise
+
+    def delete_file(self, s3_path):
+        try:
+            s3_path = s3_path.lstrip("/")
+            log.info(f"Deleting file {self.bucket_name}/{s3_path}")
+
+            # Delete the object
+            self.client.delete_object(Bucket=self.bucket_name, Key=s3_path)
+
+            log.info(f"Successfully deleted {s3_path}")
+            return True
+
+        except botocore.exceptions.ClientError as e:
+            error = e.response.get("Error", {})
+            error_code = error.get("Code", "Unknown")
+            error_message = error.get("Message", str(e))
+            log.error(f"Error deleting file ({error_code}): {error_message}")
+            log.debug(f"Full error response: {e.response}")
+            return False
+        except Exception as e:
+            log.error(f"Unexpected error deleting file: {str(e)}")
+            return False
