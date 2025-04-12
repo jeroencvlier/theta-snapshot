@@ -203,10 +203,14 @@ if __name__ == "__main__":
         expirations = get_expiry_dates(ticker)
         first_dates = pd.Timestamp("2018-01-01").strftime("%Y%m%d")  # Standard subscription
         expirations = [d for d in expirations if d > int(first_dates)]
-
-        exps_list = Parallel(n_jobs=-1, backend="multiprocessing", verbose=0)(
-            delayed(expiration_loop)(ticker=ticker, exp=exp) for exp in tqdm(expirations)
-        )
+        exps_list_filename = f"{get_folder_name()}/exps_list_{ticker}.json"
+        if bucket.file_exists(exps_list_filename):
+            exps_list = bucket.load_json_from_s3(exps_list_filename)
+        else:
+            exps_list = Parallel(n_jobs=-1, backend="multiprocessing", verbose=0)(
+                delayed(expiration_loop)(ticker=ticker, exp=exp) for exp in tqdm(expirations)
+            )
+            bucket.save_json_to_s3(exps_list, exps_list_filename)
 
         sliced_exp_list = []
         for d in exps_list:
@@ -249,3 +253,5 @@ if __name__ == "__main__":
         failed_files_df = pd.DataFrame(columns=["filepath"])
         table = pa.Table.from_pandas(failed_files_df)
         bucket.upload_table(table, failed_files_path)
+        exps_list_filename = f"{get_folder_name()}/exps_list_{ticker}.json"
+        bucket.delete_file(exps_list_filename)
