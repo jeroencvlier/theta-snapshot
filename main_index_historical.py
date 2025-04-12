@@ -182,6 +182,24 @@ if __name__ == "__main__":
     # Prepare Inputs
     # --------------------------------------------------------------
     for ticker in tickers:
+        # --------------------------------------------------------------
+        # Create Failed Files
+        # --------------------------------------------------------------
+        bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
+        existing_files = bucket.list_files(get_folder_name() + ticker)
+
+        failed_files_path = f"{get_folder_name()}/failed_files_{ticker}.parquet"
+        if bucket.file_exists(failed_files_path):
+            failed_df = bucket.read_dataframe(failed_files_path, format="parquet")
+            failed_files = failed_df["filepath"].tolist()
+            log.info(f"Found {len(failed_files)} failed files for {ticker}")
+            existing_files.extend(failed_files)
+        else:
+            failed_files = []
+
+        # --------------------------------------------------------------
+        # prepare inputs
+        # --------------------------------------------------------------
         expirations = get_expiry_dates(ticker)
         first_dates = pd.Timestamp("2018-01-01").strftime("%Y%m%d")  # Standard subscription
         expirations = [d for d in expirations if d > int(first_dates)]
@@ -198,21 +216,6 @@ if __name__ == "__main__":
 
         sum([len(v) for d in exps_list for k, v in d.items()])
         sum([len(v) for d in sliced_exp_list for k, v in d.items()])
-
-        # --------------------------------------------------------------
-        # Create Failed Files
-        # --------------------------------------------------------------
-        bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
-        existing_files = bucket.list_files(get_folder_name() + ticker)
-
-        failed_files_path = f"{get_folder_name()}/failed_files_{ticker}.parquet"
-        if bucket.file_exists(failed_files_path):
-            failed_df = bucket.read_dataframe(failed_files_path, format="parquet")
-            failed_files = failed_df["filepath"].tolist()
-            log.info(f"Found {len(failed_files)} failed files for {ticker}")
-            existing_files.extend(failed_files)
-        else:
-            failed_files = []
         # --------------------------------------------------------------
         # Start the process
         # --------------------------------------------------------------
@@ -241,6 +244,8 @@ if __name__ == "__main__":
         log.info(f"Completed {ticker}")
     log.info("All Done")
     # empty df and upload to S3
-    failed_files_df = pd.DataFrame(columns=["filepath"])
-    table = pa.Table.from_pandas(failed_files_df)
-    bucket.upload_table(table, failed_files_path)
+    for ticker in tickers:
+        failed_files_path = f"{get_folder_name()}/failed_files_{ticker}.parquet"
+        failed_files_df = pd.DataFrame(columns=["filepath"])
+        table = pa.Table.from_pandas(failed_files_df)
+        bucket.upload_table(table, failed_files_path)
