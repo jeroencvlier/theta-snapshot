@@ -216,11 +216,7 @@ if __name__ == "__main__":
         # --------------------------------------------------------------
         # Start the process
         # --------------------------------------------------------------
-        random.shuffle(exps_list)
         random.shuffle(sliced_exp_list)
-
-        for exp_dict in exps_list:
-            pass
 
         for batch in batched(sliced_exp_list, 20):
             cpus = -1
@@ -236,7 +232,8 @@ if __name__ == "__main__":
             )
             failed_returns = [f for f in failed_returns if f is not None]
             if len(failed_returns) > 0:
-                failed_files.extend(list(np.flatten(failed_returns)))
+                for fl in failed_returns:
+                    failed_files.extend(fl)
                 failed_files_df = pd.DataFrame(failed_files, columns=["filepath"])
                 table = pa.Table.from_pandas(failed_files_df)
                 bucket.upload_table(table, failed_files_path)
