@@ -173,7 +173,7 @@ if __name__ == "__main__":
     # Input Parameters
     # --------------------------------------------------------------
     ivl = 900000  # 15 minutes
-    tickers = ["SPXW", "SPY", "XLE", "GLD"]
+    tickers = ["SPXW", "SPY", "XLE", "GLD", "DBO"]
     max_trading_days = 45
 
     # --------------------------------------------------------------
