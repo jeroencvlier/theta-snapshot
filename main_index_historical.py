@@ -20,11 +20,11 @@ from theta_snapshot import (
 )
 
 log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
+
+
 # --------------------------------------------------------------
 # S3 Bucket preparation
 # -------------------------------------------------------------
-
-
 def get_folder_name() -> str:
     # return f"theta_calendar_{weeks}_weeks"
     return "data/raw/index/"
@@ -33,8 +33,6 @@ def get_folder_name() -> str:
 # --------------------------------------------------------------
 # Prepare inputs for the multi-processors
 # --------------------------------------------------------------
-
-
 def bulk_csv_request(url, params):
     dfs = []
     while url is not None:
@@ -175,7 +173,7 @@ if __name__ == "__main__":
     # Input Parameters
     # --------------------------------------------------------------
     ivl = 900000  # 15 minutes
-    tickers = ["SPXW", "SPY"]
+    tickers = ["SPXW", "SPY", "XLE", "GLD"]
     max_trading_days = 45
 
     # --------------------------------------------------------------
