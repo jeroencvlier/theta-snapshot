@@ -95,7 +95,7 @@ def get_bulk_greeks_historical(params, strikes):
 def historical_snapshot(exp_dict, ticker, ivl, existing_files):
     assert len(exp_dict) == 1
     [(exp, trading_dates)] = exp_dict.items()
-    last_date = int((dt.datetime.now() - dt.timedelta(days=5)).strftime("%Y%m%d"))
+    last_date = int((dt.datetime.now() - dt.timedelta(days=2)).strftime("%Y%m%d"))
 
     for date in trading_dates:
         greek_filename = get_folder_name() + f"{ticker}/{exp}/greeks/{date}.parquet"
