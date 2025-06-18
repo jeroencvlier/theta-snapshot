@@ -106,8 +106,6 @@ def multi_root_query_list(roots: List[str], params: dict, url: str):
 # --------------------------------------------------------------
 # Endpoint Functions
 # --------------------------------------------------------------
-
-
 def get_expiry_dates(roots: List[str]):
     url = os.getenv("BASE_URL") + "/list/expirations"
     params = {}
@@ -164,8 +162,6 @@ def get_oi(symbol: str, exp: int, right: str):
 # --------------------------------------------------------------
 # Historical Snapshot Functions
 # --------------------------------------------------------------
-
-
 def get_exp_trading_days(roots, exp):
     url = os.getenv("BASE_URL") + "/list/dates/option/quote"
     params = {"exp": exp}
@@ -372,9 +368,7 @@ def underlying_price_filter(df: pd.DataFrame, max_rows: int = 2):
             upper_bound = round(i * 0.003, 6)
             if upper_bound > 0.05:
                 break
-            filtered_df = df[
-                (df["undPricePctDiff"] >= lower_bound) & (df["undPricePctDiff"] <= upper_bound)
-            ]
+            filtered_df = df[(df["undPricePctDiff"] >= lower_bound) & (df["undPricePctDiff"] <= upper_bound)]
             if len(filtered_df) >= max_rows:
                 df = filtered_df
                 break
