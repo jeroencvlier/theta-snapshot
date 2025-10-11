@@ -28,7 +28,7 @@ log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 # -------------------------------------------------------------
 def get_folder_name() -> str:
     # return f"theta_calendar_{weeks}_weeks"
-    return "data/raw/index"
+    return "data/raw/index/"
 
 
 # --------------------------------------------------------------
@@ -188,7 +188,7 @@ if __name__ == "__main__":
         bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
         existing_files = bucket.list_files(get_folder_name() + ticker)
 
-        failed_files_path = f"{get_folder_name()}/failed_files_{ticker}.parquet"
+        failed_files_path = f"{get_folder_name()}collection_tracking/failed_files_{ticker}.parquet"
         if bucket.file_exists(failed_files_path):
             failed_df = bucket.read_dataframe(failed_files_path, format="parquet")
             failed_files = failed_df["filepath"].tolist()
@@ -203,7 +203,7 @@ if __name__ == "__main__":
         expirations = get_expiry_dates(ticker)
         first_dates = pd.Timestamp("2017-01-01").strftime("%Y%m%d")  # Standard subscription
         expirations = [d for d in expirations if d > int(first_dates)]
-        exps_list_filename = f"{get_folder_name()}/exps_list_{ticker}.json"
+        exps_list_filename = f"{get_folder_name()}collection_tracking/exps_list_{ticker}.json"
         if bucket.file_exists(exps_list_filename):
             exps_list = bucket.load_json_from_s3(exps_list_filename)
         else:
@@ -253,9 +253,9 @@ if __name__ == "__main__":
     log.info("All Done")
     # empty df and upload to S3
     for ticker in tickers:
-        failed_files_path = f"{get_folder_name()}/failed_files_{ticker}.parquet"
+        failed_files_path = f"{get_folder_name()}collection_tracking/failed_files_{ticker}.parquet"
         failed_files_df = pd.DataFrame(columns=["filepath"])
         table = pa.Table.from_pandas(failed_files_df)
         bucket.upload_table(table, failed_files_path)
-        exps_list_filename = f"{get_folder_name()}/exps_list_{ticker}.json"
+        exps_list_filename = f"{get_folder_name()}collection_tracking/exps_list_{ticker}.json"
         bucket.delete_file(exps_list_filename)
