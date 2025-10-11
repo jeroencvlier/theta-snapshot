@@ -27,7 +27,7 @@ log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 # -------------------------------------------------------------
 def get_folder_name() -> str:
     # return f"theta_calendar_{weeks}_weeks"
-    return "data/raw/index/"
+    return "data/raw/index"
 
 
 # --------------------------------------------------------------
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     # Input Parameters
     # --------------------------------------------------------------
     ivl = 900000  # 15 minutes
-    tickers = ["SPY", "QQQ", "IWM", "SPXW", "XLE", "GLD", "DBO"]
+    tickers = ["VIX", "SPY", "QQQ", "IWM", "SPXW", "XLE", "GLD", "DBO"]
     max_trading_days = 45
 
     # --------------------------------------------------------------
