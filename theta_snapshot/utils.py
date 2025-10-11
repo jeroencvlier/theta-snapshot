@@ -375,7 +375,8 @@ def is_market_open(break_Script=True, bypass=False) -> bool:
                 log.info("Market is closed")
                 is_open = False
         except Exception as e:
-            log.error(f"Failed to fetch market status - {e}")
+            log.exception(f"Failed to fetch market status - {e}")
+            log.error(f"Response: {response}")
             log.info("Building calendar with assumption that market is open")
             is_open = True
 
