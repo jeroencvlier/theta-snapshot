@@ -6,6 +6,7 @@ import pandas as pd
 from joblib import Parallel, delayed
 import pyarrow as pa
 from tqdm import tqdm
+import time
 import random
 import httpx  # install via pip install httpx
 import csv
@@ -169,6 +170,7 @@ def true_between_time_ny(start_hour=7, end_hour=10):
 
 
 if __name__ == "__main__":
+    start_time = time.time()
     # --------------------------------------------------------------
     # Input Parameters
     # --------------------------------------------------------------
@@ -242,6 +244,10 @@ if __name__ == "__main__":
                 failed_files_df = pd.DataFrame(failed_files, columns=["filepath"])
                 table = pa.Table.from_pandas(failed_files_df)
                 bucket.upload_table(table, failed_files_path)
+
+            if (time.time() - start_time) > (60 * 60 * 12) - (60 * 60):
+                log.info("Shutting Down before failing")
+                sys.exit(0)
 
         log.info(f"Completed {ticker}")
     log.info("All Done")
