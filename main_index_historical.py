@@ -149,6 +149,277 @@ def historical_snapshot(exp_dict, ticker, ivl, existing_files):
                 return [greek_filename, oi_filename, quote_filename]
 
 
+dtypes_quotes = {
+    "expiration": "int32",  # YYYYMMDD dates fit in int32
+    "strike": "int32",  # Strike prices don't need float64 precision
+    "right": "category",  # C/P categorical is very efficient
+    "ms_of_day": "int32",  # Milliseconds in a day fit in int32
+    "bid_size": "int32",  # Trade sizes fit in int32
+    "bid": "float32",  # Prices don't need float64 precision
+    "ask_size": "int32",  # Trade sizes fit in int32
+    "ask": "float32",  # Prices don't need float64 precision
+    "date": "int32",  # YYYYMMDD dates fit in int32
+}
+
+dtypes_greeks = {
+    "ms_of_day": "int32",  # Milliseconds in a day fit in int32
+    "delta": "float32",  # Options Greeks don't need float64 precision
+    "theta": "float32",  # Options Greeks
+    "vega": "float32",  # Options Greeks
+    "rho": "float32",  # Options Greeks
+    "epsilon": "float32",  # Options Greeks
+    "lambda": "float32",  # Options Greeks (note: lambda is a reserved word)
+    "implied_vol": "float32",  # Implied volatility
+    "iv_error": "float32",  # IV error
+    "underlying_price": "float32",  # Stock prices don't need float64 precision
+    "date": "int32",  # YYYYMMDD dates fit in int32
+    "strike": "int32",  # Strike prices don't need float64 precision
+    "right": "category",  # C/P categorical is very memory efficient
+}
+
+
+def optimize_dtypes(df):
+    """
+    Automatically convert columns to appropriate data types based on content.
+    Works with dynamic DataFrames where columns and types may vary.
+    """
+    result = df.copy()
+
+    for col in result.select_dtypes(include=["object"]).columns:
+        if col in ["root"]:
+            continue
+        try:
+            numeric_series = pd.to_numeric(result[col])
+            if (numeric_series == numeric_series.astype("int64")).all():
+                result[col] = numeric_series.astype("int64")
+            else:
+                result[col] = numeric_series.astype("float64")
+        except:
+            if set(result[col].dropna().unique()).issubset({"True", "False", True, False, 0, 1}):
+                result[col] = result[col].astype("boolean")
+            elif result[col].str.match(r"^\d{4}-\d{2}-\d{2}").all():
+                try:
+                    result[col] = pd.to_datetime(result[col])
+                except:
+                    pass
+    for col in result.select_dtypes(include=["float"]).columns:
+        if result[col].notna().all() and (result[col] == result[col].astype("int64")).all():
+            result[col] = result[col].astype("int64")
+    return result
+
+
+def undppctdiff(df: pd.DataFrame) -> pd.DataFrame:
+    return df.assign(
+        undPricePctDiff=(((df["strike"] / 1000) - df["underlying_price"]) / df["underlying_price"]).astype(
+            "Float32"
+        )
+    )
+
+
+def calendar_calculations(df: pd.DataFrame, gaps: int) -> pd.DataFrame:
+    # Dictionary to store all new columns
+    ncs = {}
+
+    for r in ["C", "P"]:
+        # Fixed parentheses in mark price calculation
+        ncs[f"mark_{r}"] = ((df[f"ask_{r}"] - df[f"bid_{r}"]) / 2) + df[f"bid_{r}"]
+
+        for g in range(1, gaps + 1):
+            ncs[f"mark_{r}_G{g}"] = ((df[f"ask_{r}_G{g}"] - df[f"bid_{r}_G{g}"]) / 2) + df[f"bid_{r}_G{g}"]
+            ncs[f"calCost_{r}_G{g}"] = ncs[f"mark_{r}_G{g}"] - ncs[f"mark_{r}"]
+            ncs[f"calCostPct_{r}_G{g}"] = (ncs[f"calCost_{r}_G{g}"] / df["underlying_price"]) * 100
+            ncs[f"calGapPct_{r}_G{g}"] = ncs[f"calCost_{r}_G{g}"] - ncs[f"mark_{r}_G{g}"]
+            ncs[f"ask_cal_{r}_G{g}"] = df[f"ask_{r}_G{g}"] - df[f"bid_{r}"]
+            ncs[f"bid_cal_{r}_G{g}"] = df[f"bid_{r}_G{g}"] - df[f"ask_{r}"]
+            ncs[f"spread_cal_{r}_G{g}"] = ncs[f"ask_cal_{r}_G{g}"] - ncs[f"bid_cal_{r}_G{g}"]
+            ncs[f"mark_cal_{r}_G{g}"] = (ncs[f"spread_cal_{r}_G{g}"] / 2) + ncs[f"bid_cal_{r}_G{g}"]
+            ask_cal = ncs[f"ask_cal_{r}_G{g}"]
+            spread_cal = ncs[f"spread_cal_{r}_G{g}"]
+            ncs[f"spreadPct_cal_{r}_G{g}"] = np.where(ask_cal == 0, np.nan, spread_cal / ask_cal)
+
+    keep_columns = [
+        col for col in df.columns if not any(ba in col for ba in ["bid_P", "ask_P", "bid_C", "ask_C"])
+    ]
+
+    # Create the result DataFrame with a single copy operation
+    result_df = pd.DataFrame({**{col: df[col] for col in keep_columns}, **ncs}, index=df.index)
+
+    return result_df
+
+
+def iv_pct_diff(df: pd.DataFrame, gaps) -> pd.DataFrame:
+    result = df.copy()
+    for r in ["C", "P"]:
+        for g in range(1, gaps + 1):
+            mask1 = df[f"implied_vol_{r}"] == 0
+            mask2 = df[f"implied_vol_{r}_G{g}"] == 0
+            result[f"iv_pct_diff_{r}_G{g}"] = np.nan
+            result.loc[mask1 & mask2, f"iv_pct_diff_{r}_G{g}"] = 0.0
+            result.loc[mask1 & ~mask2, f"iv_pct_diff_{r}_G{g}"] = 1.0
+            result.loc[~mask1, f"iv_pct_diff_{r}_G{g}"] = (
+                df.loc[~mask1, f"implied_vol_{r}"] - df.loc[~mask1, f"implied_vol_{r}_G{g}"]
+            ) / df.loc[~mask1, f"implied_vol_{r}"]
+            result[f"iv_pct_diff_{r}_G{g}"] = result[f"iv_pct_diff_{r}_G{g}"].astype("float32")
+    return result
+
+
+def days_before_calcs(
+    df: pd.DataFrame,
+    end_date_col: str,
+    target: str,
+    trading_days: list[pd.Timestamp],
+    from_date_col: str = None,
+    suffix: str = None,
+):
+    target_columns = {
+        "earnings": ("bdte", "dte"),
+        "fexp": ("bdtfexp", "dtfexp"),
+        "bexp": ("bdtbexp", "dtbexp"),
+        "dit": ("bdit", "dit"),
+    }
+    bdte_col, dte_col = target_columns.get(target)
+    start_dates = pd.to_datetime(df[from_date_col], format="%Y%m%d")
+    end_dates = pd.to_datetime(df[end_date_col], format="%Y%m%d")
+    start_indices = np.searchsorted(trading_days, start_dates.values)
+    end_indices = np.searchsorted(trading_days, end_dates.values)
+    df[bdte_col] = end_indices - start_indices
+    df[dte_col] = (end_dates - start_dates).dt.days
+    if suffix is not None:
+        df = df.rename(columns={bdte_col: f"{bdte_col}_{suffix}", dte_col: f"{dte_col}_{suffix}"})
+
+    return df
+
+
+def historical_snapshot_fix(sliced_exp_list, ticker, ivl):
+    dfs = []
+    furthest_date = 20251016
+    for exp_dict in tqdm(sliced_exp_list):
+        [(exp, trading_dates)] = exp_dict.items()
+        last_date = int((dt.datetime.now() - dt.timedelta(days=0)).strftime("%Y%m%d"))
+
+        trading_dates = [td for td in trading_dates if td >= furthest_date]
+
+        for date in trading_dates:
+            if date <= last_date:
+                params = {
+                    "start_date": str(date),
+                    "end_date": str(date),
+                    "use_csv": "true",
+                    "root": ticker,
+                    "exp": exp,
+                    "ivl": str(ivl),
+                }
+
+                df_quotes = get_bulk_quote_historical(params)
+
+                strikes = list(set(df_quotes["strike"].to_list()))
+                df_greeks = get_bulk_greeks_historical(params, strikes)
+                df_quotes = df_quotes.drop(
+                    columns=["root", "bid_condition", "bid_exchange", "ask_exchange", "ask_condition"]
+                ).astype(dtypes_quotes)
+
+                df_greeks = df_greeks.drop(
+                    columns=["bid", "ask", "ms_of_day2", "error_type", "error_msg"], errors="ignore"
+                )
+                df_greeks = df_greeks.dropna(subset=["ms_of_day"]).astype(dtypes_greeks)
+
+                df = pd.merge(df_greeks, df_quotes, on=["strike", "right", "date", "ms_of_day"])
+
+                assert len(df["date"].unique()) == 1, "duplicated dates!!"
+                ms_of_day = df["ms_of_day"].unique()
+                ms_of_day_exclude = [ms_of_day.min(), ms_of_day.max()]
+
+                df_puts = df[df["right"] == "P"].drop(columns="right")
+                df_calls = df[df["right"] == "C"].drop(columns="right")
+
+                df = pd.merge(
+                    df_puts,
+                    df_calls,
+                    on=["strike", "date", "ms_of_day", "underlying_price", "expiration"],
+                    suffixes=["_P", "_C"],
+                ).reset_index(drop=True)
+
+                df = df[~df["ms_of_day"].isin(ms_of_day_exclude)]
+
+                dfs.append(df)
+
+                df = pd.concat(dfs)
+                df = df.reset_index(drop=True)
+                df.to_parquet("recovery_snapshots.parquet")
+
+    df = pd.read_parquet("recovery_snapshots.parquet")
+
+    from collections import namedtuple
+
+    expirations_all = list(df["expiration"].unique())
+    max_cal_gap_days = 45
+
+    Calendar = namedtuple("Calendar", ["fexp", "bexp"])
+    calendars = []
+    expirations = []
+    for fexp in tqdm(expirations_all):
+        bexps = expirations_all[expirations_all.index(fexp) + 1 :]
+        for bexp in bexps:
+            count_cal_gap_days = pd.date_range(
+                start=pd.to_datetime(fexp, format="%Y%m%d"), end=pd.to_datetime(bexp, format="%Y%m%d")
+            )
+            count_days_to_front = pd.date_range(
+                start=pd.to_datetime(str(furthest_date), format="%Y%m%d"),
+                end=pd.to_datetime(fexp, format="%Y%m%d"),
+            )
+            if (len(count_cal_gap_days) <= max_cal_gap_days) & (len(count_days_to_front) <= max_trading_days):
+                calendars.append(Calendar(fexp=fexp, bexp=bexp))
+                expirations.extend([fexp, bexp])
+    cals = []
+    for calendar in calendars:
+        front_cal = df[df["expiration"].astype(int) == calendar.fexp]
+        back_cal = df[df["expiration"].astype(int) == calendar.bexp]
+        cal = front_cal.merge(
+            back_cal,
+            how="inner",
+            on=["date", "strike", "ms_of_day"],
+            suffixes=["", "_G1"],
+        )
+        cals.append(cal)
+    cals_df = pd.concat(cals)
+
+    cals_df["strike"] = cals_df["strike"].astype("Int64")
+    cals_df["underlying_price"] = cals_df["underlying_price"].astype("Float32")
+
+    cals_df["underlying_price"] = cals_df["underlying_price"].astype("Float32")
+    cals_df = optimize_dtypes(cals_df)
+    cals_df = undppctdiff(cals_df)
+
+    cals_df = calendar_calculations(cals_df, gaps=1)
+    import pandas_market_calendars as mcal
+
+    nyse = mcal.get_calendar("NYSE")
+    trading_days = nyse.schedule(
+        start_date=dt.datetime.now().date(), end_date=pd.to_datetime(max(expirations_all), format="%Y%m%d")
+    ).index
+
+    cals_df = days_before_calcs(
+        df=cals_df,
+        end_date_col="expiration",
+        target="fexp",
+        trading_days=trading_days,
+        from_date_col="date",
+    )
+    for g in range(1, 1 + 1):
+        cals_df = days_before_calcs(
+            df=cals_df,
+            end_date_col=f"expiration_G{g}",
+            target="bexp",
+            trading_days=trading_days,
+            from_date_col="date",
+            suffix=f"G{g}",
+        )
+    cals_df = iv_pct_diff(cals_df, gaps=1)
+    cals_df = cals_df.reset_index(drop=True)
+
+    cals_df.to_parquet("fully_calculated_recovery.parquet")
+
+
 def expiration_loop(ticker, exp):
     trading_days = get_exp_trading_days(roots=ticker, exp=exp)
     return {exp: trading_days}
@@ -175,7 +446,7 @@ if __name__ == "__main__":
     # Input Parameters
     # --------------------------------------------------------------
     ivl = 900000  # 15 minutes
-    tickers = ["VIX", "SPY", "QQQ", "IWM", "SPXW", "XLE", "GLD", "DBO"]
+    tickers = ["VIX", "VIXW", "SPY", "QQQ", "IWM", "SPXW", "XLE", "GLD", "DBO"]
     max_trading_days = 45
 
     # --------------------------------------------------------------
@@ -201,6 +472,7 @@ if __name__ == "__main__":
         # prepare inputs
         # --------------------------------------------------------------
         expirations = get_expiry_dates(ticker)
+        # first_dates = pd.Timestamp("2025-10-15").strftime("%Y%m%d")
         first_dates = pd.Timestamp("2017-01-01").strftime("%Y%m%d")  # Standard subscription
         expirations = [d for d in expirations if d > int(first_dates)]
         exps_list_filename = f"{get_folder_name()}.memory/exps_list_{ticker}.json"
