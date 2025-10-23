@@ -473,7 +473,7 @@ if __name__ == "__main__":
         # --------------------------------------------------------------
         expirations = get_expiry_dates(ticker)
         # first_dates = pd.Timestamp("2025-10-15").strftime("%Y%m%d")
-        first_dates = pd.Timestamp("2022-01-01").strftime("%Y%m%d")  # Standard subscription
+        first_dates = pd.Timestamp("2021-01-01").strftime("%Y%m%d")  # Standard subscription
         expirations = [d for d in expirations if d > int(first_dates)]
         exps_list_filename = f"{get_folder_name()}.memory/exps_list_{ticker}.json"
         if bucket.file_exists(exps_list_filename):
