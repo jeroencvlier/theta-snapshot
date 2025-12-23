@@ -52,7 +52,7 @@ def bulk_csv_request(url, params):
             print("Requesting Next Page, ", url)
         else:
             url = None
-
+    time.sleep(2)
     if len(dfs) > 0:
         return pd.concat(dfs).reset_index(drop=True)
 
