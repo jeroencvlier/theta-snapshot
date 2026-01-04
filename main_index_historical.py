@@ -446,7 +446,7 @@ if __name__ == "__main__":
     # Input Parameters
     # --------------------------------------------------------------
     ivl = 900000  # 15 minutes
-    tickers = ["VXZ", "SVXY", "SPY", "SPXW", "VIXW", "VIX", "QQQ", "IWM", "XLE", "GLD", "DBO"]
+    tickers = ["VXZ", "SVXY", "SPY", "SPXW", "SPX", "VIXW", "VIX", "QQQ", "IWM", "XLE", "GLD", "DBO"]
     max_trading_days = 45
 
     # --------------------------------------------------------------
@@ -500,8 +500,8 @@ if __name__ == "__main__":
         for batch in batched(sliced_exp_list, 20):
             cpus = -1
             if is_market_open(break_Script=False) or true_between_time_ny():
-                cpus = 1
-                log.info(f"Reducing the number of CPUs to {cpus}")
+                log.info("Market is open, shutting down data scraper")
+                sys.exit(0)
 
             failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=0)(
                 delayed(historical_snapshot)(
