@@ -501,11 +501,11 @@ if __name__ == "__main__":
         for batch in batched(sliced_exp_list, n_jobs):
             is_market_open(break_script=True)
 
-            failed_returns = Parallel(n_jobs=n_jobs, backend="multiprocessing", verbose=0)(
+            failed_returns = Parallel(n_jobs=n_jobs, backend="multiprocessing", verbose=10)(
                 delayed(historical_snapshot)(
                     exp_dict=exp_dict, ticker=ticker, ivl=ivl, existing_files=existing_files
                 )
-                for exp_dict in tqdm(batch)
+                for exp_dict in batch
             )
             failed_returns = [f for f in failed_returns if f is not None]
             if len(failed_returns) > 0:
