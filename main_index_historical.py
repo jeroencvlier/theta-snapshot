@@ -498,7 +498,7 @@ if __name__ == "__main__":
         random.shuffle(sliced_exp_list)
 
         for batch in batched(sliced_exp_list, 20):
-            is_market_open(break_Script=True)
+            is_market_open(break_script=True)
 
             failed_returns = Parallel(n_jobs=4, backend="multiprocessing", verbose=0)(
                 delayed(historical_snapshot)(
