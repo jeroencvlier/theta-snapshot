@@ -51,10 +51,7 @@ def get_priority_symbols():
     grade_query = '''SELECT symbol, under_avg_trade_class, weeks FROM public."StockGrades"'''
     grades = read_from_db(query=grade_query)
     grades = (
-        grades.groupby("symbol")["under_avg_trade_class"]
-        .mean()
-        .sort_values(ascending=False)
-        .reset_index()
+        grades.groupby("symbol")["under_avg_trade_class"].mean().sort_values(ascending=False).reset_index()
     )
 
     # sorted_symbols = ["AAPL","AMZN","AZO","BABA","BIB","BIDU","CF","CMG","CRM","DE","FB","FDX","FFIV","GMCR","GME","GOOG","IBM","JOY","LNKD","LULU","MA","NAG","NFLX","PCLN","SCTY","SINA","TIF","TSLA","ULTA","WFM"]
@@ -80,9 +77,7 @@ def prepare_inputs():
     for symbol in get_priority_symbols():
         cdf = sc_df[sc_df["symbol"] == symbol]
         roots = list(
-            set(
-                [symbol] + cdf["symbol"].unique().tolist() + cdf["symbol_changes"].unique().tolist()
-            )
+            set([symbol] + cdf["symbol"].unique().tolist() + cdf["symbol_changes"].unique().tolist())
         )
         edf = earnings[earnings["symbol"].isin(roots)]
 
@@ -92,9 +87,7 @@ def prepare_inputs():
         for idx, row in edf.iterrows():
             fiscal_quart = get_quarter(row["fiscalQuarterEnding"])
             if (pd.Timestamp.now() - row["reportDate"]).days < 14:
-                log.info(
-                    f"Skipping {symbol} {fiscal_quart}: Date is less than 2 weeks: {row['reportDate']}"
-                )
+                log.info(f"Skipping {symbol} {fiscal_quart}: Date is less than 2 weeks: {row['reportDate']}")
             else:
                 for weeks in week_list:
                     kwargs = {
@@ -360,9 +353,7 @@ if __name__ == "__main__":
     # --------------------------------------------------------------
     # Prepare symbols that have changed
     # --------------------------------------------------------------
-    sc_df = read_from_db(
-        query=f"""SELECT * FROM "changesPolygon" WHERE "symbol" IN {tuple(symbols)}"""
-    )
+    sc_df = read_from_db(query=f"""SELECT * FROM "changesPolygon" WHERE "symbol" IN {tuple(symbols)}""")
     sc_df["entries"] = sc_df.groupby("symbol")["symbol"].transform("count")
     sc_df = sc_df[sc_df["entries"] >= 2]
 

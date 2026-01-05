@@ -447,7 +447,7 @@ if __name__ == "__main__":
     # --------------------------------------------------------------
     ivl = 900000  # 15 minutes
     tickers = ["VXZ", "SVXY", "SPY", "SPXW", "SPX", "VIXW", "VIX", "QQQ", "IWM", "XLE", "GLD", "DBO"]
-    max_trading_days = 45
+    max_trading_days = 180
 
     # --------------------------------------------------------------
     # Prepare Inputs
