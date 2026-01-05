@@ -498,12 +498,9 @@ if __name__ == "__main__":
         random.shuffle(sliced_exp_list)
 
         for batch in batched(sliced_exp_list, 20):
-            cpus = -1
-            if is_market_open(break_Script=False) or true_between_time_ny():
-                log.info("Market is open, shutting down data scraper")
-                sys.exit(0)
+            is_market_open(break_Script=True)
 
-            failed_returns = Parallel(n_jobs=cpus, backend="multiprocessing", verbose=0)(
+            failed_returns = Parallel(n_jobs=4, backend="multiprocessing", verbose=0)(
                 delayed(historical_snapshot)(
                     exp_dict=exp_dict, ticker=ticker, ivl=ivl, existing_files=existing_files
                 )
