@@ -22,6 +22,9 @@ import pyarrow.parquet as pq
 import botocore
 import io
 
+import exchange_calendars as xcals
+from datetime import datetime
+import pytz
 
 httpx_logger = log.getLogger("httpx")
 httpx_logger.setLevel(log.CRITICAL)
@@ -368,13 +371,12 @@ def is_market_open(break_script=True, bypass=False) -> bool:
     is_open = True  # default assumption
 
     try:
-        url = f"https://api.polygon.io/v1/marketstatus/now?apiKey={os.getenv('naughty_hermann')}"
-        response = httpx.get(url)
-        response.raise_for_status()
-        is_open = response.json()["market"].lower() == "open"
+        calendar = xcals.get_calendar("XNYS")
+        now = datetime.now(pytz.timezone("America/New_York"))
+        is_open = calendar.is_open_on_minute(now)
         log.info(f"Market is {'open' if is_open else 'closed'}")
     except Exception as e:
-        log.exception(f"Failed to fetch market status - {e}")
+        log.exception(f"Failed to check market status - {e}")
         log.info("Assuming market is open")
         is_open = True
 

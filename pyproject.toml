@@ -7,6 +7,7 @@ requires-python = ">=3.12.8"
 dependencies = [
     "boto3>=1.36.2",
     "category-encoders>=2.8.0",
+    "exchange-calendars>=4.9",
     "fastapi>=0.115.6",
     "flaml>=2.3.3",
     "httpx>=0.28.1",

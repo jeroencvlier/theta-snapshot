@@ -20,6 +20,7 @@ from theta_snapshot import (
     is_market_open,
 )
 
+
 log.basicConfig(level=log.INFO, format="%(asctime)s - %(message)s")
 
 
