@@ -500,7 +500,7 @@ if __name__ == "__main__":
 
         n_jobs = 4
         for batch in batched(sliced_exp_list, n_jobs):
-            is_market_open(break_script=True)
+            is_market_open(break_script=False)
 
             failed_returns = Parallel(n_jobs=n_jobs, backend="multiprocessing", verbose=10)(
                 delayed(historical_snapshot)(
