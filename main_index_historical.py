@@ -460,11 +460,11 @@ if __name__ == "__main__":
     # ivl = 900000  # 15 minutes
 
     ticker_list = []
-    for t in ["VXZ", "SVXY", "VIXW", "VIX"]:
-        ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 180, "rth": "true"})
-
     for t in ["SPY", "SPXW", "SPX", "XSP", "QQQ", "IWM", "XLE", "GLD", "DBO"]:
         ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 60, "rth": "true"})
+
+    for t in ["VXZ", "SVXY", "VIXW", "VIX"]:
+        ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 180, "rth": "true"})
 
     for t in ["SPX", "SPXW"]:
         ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 60, "rth": "false"})
