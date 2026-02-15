@@ -86,7 +86,7 @@ def thread_strikes_greeks(params, strike):
 
 
 def get_bulk_greeks_historical(params, strikes):
-    strike_dfs = Parallel(n_jobs=20, backend="threading", verbose=0)(
+    strike_dfs = Parallel(n_jobs=10, backend="threading", verbose=0)(
         delayed(thread_strikes_greeks)(params=params, strike=exp) for exp in strikes
     )
     strike_dfs = [df for df in strike_dfs if df is not None]
@@ -94,15 +94,20 @@ def get_bulk_greeks_historical(params, strikes):
         return pd.concat(strike_dfs).reset_index(drop=True)
 
 
-def historical_snapshot(exp_dict, ticker, ivl, existing_files):
+def historical_snapshot(exp_dict, ticker, ivl, rth, existing_files):
     assert len(exp_dict) == 1
     [(exp, trading_dates)] = exp_dict.items()
-    last_date = int((dt.datetime.now() - dt.timedelta(days=2)).strftime("%Y%m%d"))
+    last_date = int((dt.datetime.now() - dt.timedelta(days=1)).strftime("%Y%m%d"))
+    config_prefix = get_config_prefix(ticker, ivl, rth)
 
     for date in trading_dates:
-        greek_filename = get_folder_name() + f"{ticker}/{exp}/greeks/{date}.parquet"
-        oi_filename = get_folder_name() + f"{ticker}/{exp}/open_interest/{date}.parquet"
-        quote_filename = get_folder_name() + f"{ticker}/{exp}/quotes/{date}.parquet"
+        # greek_filename = get_folder_name() + f"{ticker}/{exp}/greeks/{date}.parquet"
+        # oi_filename = get_folder_name() + f"{ticker}/{exp}/open_interest/{date}.parquet"
+        # quote_filename = get_folder_name() + f"{ticker}/{exp}/quotes/{date}.parquet"
+
+        greek_filename = f"{config_prefix}{exp}/greeks/{date}.parquet"
+        oi_filename = f"{config_prefix}{exp}/open_interest/{date}.parquet"
+        quote_filename = f"{config_prefix}{exp}/quotes/{date}.parquet"
         greeks = greek_filename in existing_files
         ois = oi_filename in existing_files
         quotes = quote_filename in existing_files
@@ -112,6 +117,7 @@ def historical_snapshot(exp_dict, ticker, ivl, existing_files):
         df_greeks = None
 
         if (date <= last_date) and (not all_exist):
+            # pass
             try:
                 params = {
                     "start_date": str(date),
@@ -120,6 +126,7 @@ def historical_snapshot(exp_dict, ticker, ivl, existing_files):
                     "root": ticker,
                     "exp": exp,
                     "ivl": str(ivl),
+                    "rth": rth,
                 }
                 try:
                     df_oi = get_bulk_oi_historical(params)
@@ -441,26 +448,50 @@ def true_between_time_ny(start_hour=7, end_hour=10):
         return False
 
 
+def get_config_prefix(ticker: str, ivl: int, rth: str) -> str:
+    return f"{get_folder_name()}{ticker}/ivl={ivl}_rth={rth}/"
+
+
 if __name__ == "__main__":
     start_time = time.time()
     # --------------------------------------------------------------
     # Input Parameters
     # --------------------------------------------------------------
-    ivl = 900000  # 15 minutes
-    tickers = ["SPY", "SPXW", "SPX", "VXZ", "SVXY", "VIXW", "VIX", "XSP", "QQQ", "IWM", "XLE", "GLD", "DBO"]
-    max_trading_days = 180
+    # ivl = 900000  # 15 minutes
+
+    ticker_list = []
+    for t in ["VXZ", "SVXY", "VIXW", "VIX"]:
+        ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 180, "rth": "true"})
+
+    for t in ["SPY", "SPXW", "SPX", "XSP", "QQQ", "IWM", "XLE", "GLD", "DBO"]:
+        ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 60, "rth": "true"})
+
+    for t in ["SPX", "SPXW"]:
+        ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 60, "rth": "false"})
+
+    for t in ["SPY"]:
+        ticker_list.append({"ticker": t, "ivl": 300000, "max_trading_days": 1, "rth": "true"})
 
     # --------------------------------------------------------------
     # Prepare Inputs
     # --------------------------------------------------------------
-    for ticker in tickers:
+    for ticker_obj in ticker_list:
         # --------------------------------------------------------------
         # Create Failed Files
         # --------------------------------------------------------------
-        bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
-        existing_files = bucket.list_files(get_folder_name() + ticker)
+        ticker = ticker_obj["ticker"]
+        ivl = ticker_obj["ivl"]
+        max_trading_days = ticker_obj["max_trading_days"]
+        rth = ticker_obj["rth"]
 
-        failed_files_path = f"{get_folder_name()}.memory/failed_files_{ticker}.parquet"
+        bucket = S3Handler(bucket_name=os.getenv("S3_BUCKET_NAME"), region="us-east-2")
+        # existing_files = bucket.list_files(get_folder_name() + ticker)
+        existing_files = bucket.list_files(get_config_prefix(ticker, ivl, rth))
+
+        config_key = f"{ticker}_ivl{ivl}_rth{rth}"
+        failed_files_path = f"{get_folder_name()}.memory/failed_files_{config_key}.parquet"
+
+        # failed_files_path = f"{get_folder_name()}.memory/failed_files_{ticker}.parquet"
         if bucket.file_exists(failed_files_path):
             failed_df = bucket.read_dataframe(failed_files_path, format="parquet")
             failed_files = failed_df["filepath"].tolist()
@@ -488,8 +519,14 @@ if __name__ == "__main__":
         sliced_exp_list = []
         for d in exps_list:
             [(k, v)] = d.items()
-            nv = sorted(v)[-max_trading_days:]
-            sliced_exp_list.append({k: nv})
+            if k in v:
+                nv = sorted(v)[-max_trading_days:]
+                sliced_exp_list.append({k: nv})
+
+        for d in sliced_exp_list:
+            [(k, v)] = d.items()
+            if k not in v:
+                print(f"{k} not in {v}")
 
         sum([len(v) for d in exps_list for k, v in d.items()])
         sum([len(v) for d in sliced_exp_list for k, v in d.items()])
@@ -498,16 +535,17 @@ if __name__ == "__main__":
         # --------------------------------------------------------------
         random.shuffle(sliced_exp_list)
 
-        n_jobs = 4
+        n_jobs = 1
         for batch in batched(sliced_exp_list, n_jobs):
             is_market_open(break_script=False)
 
             failed_returns = Parallel(n_jobs=n_jobs, backend="multiprocessing", verbose=10)(
                 delayed(historical_snapshot)(
-                    exp_dict=exp_dict, ticker=ticker, ivl=ivl, existing_files=existing_files
+                    exp_dict=exp_dict, ticker=ticker, ivl=ivl, rth=rth, existing_files=existing_files
                 )
                 for exp_dict in batch
             )
+
             failed_returns = [f for f in failed_returns if f is not None]
             if len(failed_returns) > 0:
                 for fl in failed_returns:
@@ -523,8 +561,13 @@ if __name__ == "__main__":
         log.info(f"Completed {ticker}")
     log.info("All Done")
     # empty df and upload to S3
-    for ticker in tickers:
-        failed_files_path = f"{get_folder_name()}.memory/failed_files_{ticker}.parquet"
+    for ticker_obj in ticker_list:
+        ticker = ticker_obj["ticker"]
+        ivl = ticker_obj["ivl"]
+        rth = ticker_obj["rth"]
+        config_key = f"{ticker}_ivl{ivl}_rth{rth}"
+        failed_files_path = f"{get_folder_name()}.memory/failed_files_{config_key}.parquet"
+        # failed_files_path = f"{get_folder_name()}.memory/failed_files_{ticker}.parquet"
         failed_files_df = pd.DataFrame(columns=["filepath"])
         table = pa.Table.from_pandas(failed_files_df)
         bucket.upload_table(table, failed_files_path)
