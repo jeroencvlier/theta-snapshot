@@ -560,7 +560,7 @@ if __name__ == "__main__":
                 table = pa.Table.from_pandas(failed_files_df)
                 bucket.upload_table(table, failed_files_path)
 
-            if (time.time() - start_time) > (60 * 60 * 12) - (60 * 60):
+            if (time.time() - start_time) > (60 * 60 * 10) - (60 * 60):
                 log.info("Shutting Down before failing")
                 sys.exit(0)
 
