@@ -460,17 +460,23 @@ if __name__ == "__main__":
     # ivl = 900000  # 15 minutes
 
     ticker_list = []
-    for t in ["SPY", "SPXW", "SPX", "XSP", "QQQ", "IWM", "XLE", "GLD", "DBO"]:
+    for t in ["SPY", "SPXW", "SPX"]:
         ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 60, "rth": "true"})
 
-    for t in ["VXZ", "SVXY", "VIXW", "VIX"]:
+    for t in ["VIXW", "VIX"]:
         ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 180, "rth": "true"})
+
+    for t in ["SPY", "SPXW"]:
+        ticker_list.append({"ticker": t, "ivl": 300000, "max_trading_days": 1, "rth": "true"})
 
     for t in ["SPX", "SPXW"]:
         ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 60, "rth": "false"})
 
-    for t in ["SPY"]:
-        ticker_list.append({"ticker": t, "ivl": 300000, "max_trading_days": 1, "rth": "true"})
+    for t in ["VXZ", "SVXY"]:
+        ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 180, "rth": "true"})
+
+    for t in ["XSP", "QQQ", "IWM", "XLE", "GLD", "DBO"]:
+        ticker_list.append({"ticker": t, "ivl": 900000, "max_trading_days": 60, "rth": "true"})
 
     # --------------------------------------------------------------
     # Prepare Inputs
